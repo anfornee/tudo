@@ -5,7 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 body {
-  background: slateblue;
+  background: #000222;
+  color: #FFF;
 }
 
 :root {
