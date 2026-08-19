@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en" className={cn("font-sans", notoSans.variable, figtreeHeading.variable)}
+      lang="en" className={cn("dark", "font-sans", notoSans.variable, figtreeHeading.variable)}
     >
       <body>{children}</body>
     </html>
