@@ -22,7 +22,7 @@ export default function GpxUploader() {
     setIsLoading(true);
 
     try {
-      const xml = await file.text();
+      const xml = await selectedFile.text();
 
       const ride = analyzeGpx(xml);
 
