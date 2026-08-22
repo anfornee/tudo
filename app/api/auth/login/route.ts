@@ -32,34 +32,43 @@ async function importCertToKey(pem: string): Promise<CryptoKey> {
   );
 }
 
+// ... (keep your helper functions at the top)
+
 export async function POST(request: Request) {
   try {
     const { idToken } = await request.json();
     if (!idToken) return NextResponse.json({ error: "Missing token" }, { status: 400 });
 
-    // 1. Split the JWT into [Header, Payload, Signature]
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    
+    // 👇 SAFEGUARD 1: Stop immediately if the environment variable is missing on Vercel
+    if (!projectId) {
+      throw new Error("Missing NEXT_PUBLIC_FIREBASE_PROJECT_ID environment variable on server");
+    }
+
     const parts = idToken.split(".");
     if (parts.length !== 3) throw new Error("Invalid JWT layout");
     const [headerStr, payloadStr, signatureStr] = parts;
 
-    // 2. Parse the Header to find the Key ID ("kid")
     const header = JSON.parse(base64UrlDecode(headerStr));
     const kid = header.kid;
 
-    // 3. Fetch Google's public x509 certificates
     const certsResponse = await fetch("https://googleapis.com");
+    
+    // 👇 SAFEGUARD 2: Catch HTML error responses before parsing them as JSON
+    if (!certsResponse.ok) {
+      throw new Error(`Google certificate fetch failed with status: ${certsResponse.status}`);
+    }
+    
     const publicCerts = await certsResponse.json();
     const targetCert = publicCerts[kid];
     if (!targetCert) throw new Error("Matching public key not found");
 
-    // 4. Verify the Token Signature using native Web Crypto APIs
     const publicKey = await importCertToKey(targetCert);
     
-    // Combine header and payload into an ArrayBuffer for signature validation
     const enc = new TextEncoder();
     const dataToVerify = enc.encode(`${headerStr}.${payloadStr}`);
     
-    // Decode the signature into an ArrayBuffer
     const sigBinary = base64UrlDecode(signatureStr);
     const signatureBuffer = new Uint8Array(sigBinary.length);
     for (let i = 0; i < sigBinary.length; i++) {
@@ -75,19 +84,16 @@ export async function POST(request: Request) {
 
     if (!isSignatureValid) throw new Error("Signature validation failed");
 
-    // 5. Inspect the Payload claims (Expiration, Project Target, Audience)
     const payload = JSON.parse(base64UrlDecode(payloadStr));
     const now = Math.floor(Date.now() / 1000);
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
     if (payload.exp < now) throw new Error("Token has expired");
     if (payload.aud !== projectId) throw new Error("Audience mismatch");
     if (payload.iss !== `https://google.com{projectId}`) throw new Error("Issuer mismatch");
 
-    // 6. Save the token as an HTTP-Only cookie
     const cookieStore = await cookies();
     cookieStore.set("session", idToken, {
-      maxAge: 60 * 60 * 24 * 5, // 5 days in seconds
+      maxAge: 60 * 60 * 24 * 5, 
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       path: "/",
@@ -96,7 +102,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ status: "success" }, { status: 200 });
   } catch (error: any) {
+    // This will now output the real configuration failure directly to your Vercel logs
     console.error("Native validation failed:", error.message);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
+
