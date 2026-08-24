@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const header = JSON.parse(base64UrlDecode(headerStr));
     const kid = header.kid;
 
-    const certsResponse = await fetch("https://googleapis.com");
+    const certsResponse = await fetch("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com");
     
     // 👇 SAFEGUARD 2: Catch HTML error responses before parsing them as JSON
     if (!certsResponse.ok) {
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
 
     if (payload.exp < now) throw new Error("Token has expired");
     if (payload.aud !== projectId) throw new Error("Audience mismatch");
-    if (payload.iss !== `https://google.com{projectId}`) throw new Error("Issuer mismatch");
+    if (payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error("Issuer mismatch")
 
     const cookieStore = await cookies();
     cookieStore.set("session", idToken, {
