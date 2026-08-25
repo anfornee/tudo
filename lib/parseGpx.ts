@@ -1,67 +1,23 @@
+import type { RideData } from "./ride.types";
+import {
+	calculateBestAverage,
+	calculateNormalizedPower,
+	calculatePowerPercentiles,
+} from "./rideCalculations";
+
 export interface TrackPoint {
-	latitude: number
-	longitude: number
-	elevation?: number
-	timestamp?: Date
-	power?: number
-	cadence?: number
-	heartRate?: number
+	latitude: number;
+	longitude: number;
+	elevation?: number;
+	timestamp?: Date;
+	power?: number;
+	cadence?: number;
+	heartRate?: number;
 }
 
-export interface DistanceMetrics {
-	meters: number
-	kilometers: number
-	miles: number
-}
-
-export interface SpeedMetrics {
-	kph: number
-	mph: number
-}
-
-export interface ElevationMetrics {
-	meters: number
-	feet: number
-}
-
-export interface PowerBlock {
-	startSeconds: number
-	endSeconds: number
-	averagePower: number
-	maxPower: number
-}
-
-export interface RideSummary {
-	durationSeconds: number
-
-	distance: DistanceMetrics
-
-	averageSpeed: SpeedMetrics
-	maxSpeed: SpeedMetrics
-
-	elevationGain: ElevationMetrics
-	elevationLoss: ElevationMetrics
-
-	averagePower?: number
-	maxPower?: number
-	normalizedPower?: number
-
-	averageCadence?: number
-	maxCadence?: number
-
-	averageHeartRate?: number
-	maxHeartRate?: number
-
-	workKj?: number
-
-	powerBlocks: PowerBlock[]
-
-	points: TrackPoint[]
-}
-
-const GPX_NS = 'http://www.topografix.com/GPX/1/1'
+const GPX_NS = "http://www.topografix.com/GPX/1/1";
 const GPX_EXT_NS =
-	'http://www.garmin.com/xmlschemas/TrackPointExtension/v1'
+	"http://www.garmin.com/xmlschemas/TrackPointExtension/v1";
 
 /**
  * Safely converts a string to a number.
@@ -69,13 +25,13 @@ const GPX_EXT_NS =
 function numberOrUndefined(
 	value: string | null | undefined,
 ): number | undefined {
-	if (value === null || value === undefined || value === '') {
-		return undefined
+	if (value === null || value === undefined || value === "") {
+		return undefined;
 	}
 
-	const number = Number(value)
+	const number = Number(value);
 
-	return Number.isFinite(number) ? number : undefined
+	return Number.isFinite(number) ? number : undefined;
 }
 
 /**
@@ -90,50 +46,50 @@ function haversineDistance(
 	lat2: number,
 	lon2: number,
 ): number {
-	const earthRadius = 6_371_000
+	const earthRadius = 6_371_000;
 
-	const lat1Rad = (lat1 * Math.PI) / 180
-	const lat2Rad = (lat2 * Math.PI) / 180
+	const lat1Rad = (lat1 * Math.PI) / 180;
+	const lat2Rad = (lat2 * Math.PI) / 180;
 
-	const deltaLat = ((lat2 - lat1) * Math.PI) / 180
-	const deltaLon = ((lon2 - lon1) * Math.PI) / 180
+	const deltaLat = ((lat2 - lat1) * Math.PI) / 180;
+	const deltaLon = ((lon2 - lon1) * Math.PI) / 180;
 
 	const a =
 		Math.sin(deltaLat / 2) ** 2 +
 		Math.cos(lat1Rad) *
 			Math.cos(lat2Rad) *
-			Math.sin(deltaLon / 2) ** 2
+			Math.sin(deltaLon / 2) ** 2;
 
 	const c =
-		2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+		2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-	return earthRadius * c
+	return earthRadius * c;
 }
 
 /**
  * Parse GPX XML into normalized track points.
  */
 function parseTrackPoints(xml: string): TrackPoint[] {
-	const parser = new DOMParser()
+	const parser = new DOMParser();
 
 	const document = parser.parseFromString(
 		xml,
-		'application/xml',
-	)
+		"application/xml",
+	);
 
 	const parserError =
-		document.querySelector('parsererror')
+		document.querySelector("parsererror");
 
 	if (parserError) {
-		throw new Error('Invalid GPX XML')
+		throw new Error("Invalid GPX XML");
 	}
 
 	const trackPoints = Array.from(
 		document.getElementsByTagNameNS(
 			GPX_NS,
-			'trkpt',
+			"trkpt",
 		),
-	)
+	);
 
 	/*
 	 * Some GPX files don't use the GPX 1.1 namespace correctly.
@@ -143,84 +99,95 @@ function parseTrackPoints(xml: string): TrackPoint[] {
 		trackPoints.length > 0
 			? trackPoints
 			: Array.from(
-					document.getElementsByTagName('trkpt'),
-				)
+					document.getElementsByTagName("trkpt"),
+				);
 
 	return points.map((point): TrackPoint => {
 		const latitude = Number(
-			point.getAttribute('lat'),
-		)
+			point.getAttribute("lat"),
+		);
 
 		const longitude = Number(
-			point.getAttribute('lon'),
-		)
+			point.getAttribute("lon"),
+		);
+
+		if (
+			!Number.isFinite(latitude) ||
+			!Number.isFinite(longitude)
+		) {
+			throw new Error(
+				"GPX contains an invalid track point",
+			);
+		}
 
 		const elevationElement =
 			point.getElementsByTagNameNS(
 				GPX_NS,
-				'ele',
+				"ele",
 			)[0] ??
-			point.getElementsByTagName('ele')[0]
+			point.getElementsByTagName("ele")[0];
 
 		const elevation = numberOrUndefined(
 			elevationElement?.textContent,
-		)
+		);
 
 		const timeElement =
 			point.getElementsByTagNameNS(
 				GPX_NS,
-				'time',
+				"time",
 			)[0] ??
-			point.getElementsByTagName('time')[0]
+			point.getElementsByTagName("time")[0];
 
 		const timeString =
-			timeElement?.textContent ?? undefined
+			timeElement?.textContent ?? undefined;
+
+		const timestamp = timeString
+			? new Date(timeString)
+			: undefined;
 
 		/*
 		 * Power can appear directly under extensions
 		 * depending on the GPX exporter.
 		 */
 		const powerElement =
-			point.getElementsByTagName('power')[0]
+			point.getElementsByTagName("power")[0];
 
 		const power = numberOrUndefined(
 			powerElement?.textContent,
-		)
+		);
 
 		const cadenceElement =
 			point.getElementsByTagNameNS(
 				GPX_EXT_NS,
-				'cad',
+				"cad",
 			)[0] ??
-			point.getElementsByTagName('cad')[0]
+			point.getElementsByTagName("cad")[0];
 
 		const cadence = numberOrUndefined(
 			cadenceElement?.textContent,
-		)
+		);
 
 		const heartRateElement =
 			point.getElementsByTagNameNS(
 				GPX_EXT_NS,
-				'hr',
+				"hr",
 			)[0] ??
-			point.getElementsByTagName('hr')[0]
+			point.getElementsByTagName("hr")[0];
 
 		const heartRate = numberOrUndefined(
 			heartRateElement?.textContent,
-		)
+		);
 
 		return {
 			latitude,
 			longitude,
 			elevation,
-			timestamp: timeString
-				? new Date(timeString)
-				: undefined,
+			timestamp,
 			power,
 			cadence,
 			heartRate,
-		}
-	})
+		};
+	});
 }
 
 /**
@@ -234,17 +201,17 @@ function calculateDuration(
 		.filter(
 			(value): value is number =>
 				value !== undefined,
-		)
+		);
 
 	if (timestamps.length < 2) {
-		return 0
+		return 0;
 	}
 
 	return (
 		(timestamps[timestamps.length - 1] -
 			timestamps[0]) /
 		1000
-	)
+	);
 }
 
 /**
@@ -255,46 +222,21 @@ function calculateDuration(
 function calculateDistance(
 	points: TrackPoint[],
 ): number {
-	let distance = 0
+	let distance = 0;
 
 	for (let i = 1; i < points.length; i++) {
-		const previous = points[i - 1]
-		const current = points[i]
+		const previous = points[i - 1];
+		const current = points[i];
 
 		distance += haversineDistance(
 			previous.latitude,
 			previous.longitude,
 			current.latitude,
 			current.longitude,
-		)
+		);
 	}
 
-	return distance
-}
-
-/**
- * Convert meters into multiple useful units.
- */
-function createDistanceMetrics(
-	meters: number,
-): DistanceMetrics {
-	return {
-		meters,
-		kilometers: meters / 1000,
-		miles: meters / 1609.344,
-	}
-}
-
-/**
- * Convert meters/second into kph and mph.
- */
-function createSpeedMetrics(
-	metersPerSecond: number,
-): SpeedMetrics {
-	return {
-		kph: metersPerSecond * 3.6,
-		mph: metersPerSecond * 2.236936,
-	}
+	return distance;
 }
 
 /**
@@ -306,120 +248,76 @@ function createSpeedMetrics(
 function calculateElevation(
 	points: TrackPoint[],
 ): {
-	gain: number
-	loss: number
+	gain: number;
+	loss: number;
 } {
-	let gain = 0
-	let loss = 0
+	let gain = 0;
+	let loss = 0;
 
 	for (let i = 1; i < points.length; i++) {
 		const previousElevation =
-			points[i - 1].elevation
+			points[i - 1].elevation;
 
 		const currentElevation =
-			points[i].elevation
+			points[i].elevation;
 
 		if (
 			previousElevation === undefined ||
 			currentElevation === undefined
 		) {
-			continue
+			continue;
 		}
 
 		const difference =
 			currentElevation -
-			previousElevation
+			previousElevation;
 
 		// Ignore small GPS elevation fluctuations.
 		if (Math.abs(difference) < 1) {
-			continue
+			continue;
 		}
 
 		if (difference > 0) {
-			gain += difference
+			gain += difference;
 		} else {
-			loss += Math.abs(difference)
+			loss += Math.abs(difference);
 		}
 	}
 
 	return {
 		gain,
 		loss,
-	}
+	};
 }
 
 /**
- * Convert elevation into meters and feet.
- */
-function createElevationMetrics(
-	meters: number,
-): ElevationMetrics {
-	return {
-		meters,
-		feet: meters * 3.28084,
-	}
-}
-
-/**
- * Calculate average value.
- */
-function calculateAverage(
-	values: number[],
-): number | undefined {
-	if (!values.length) {
-		return undefined
-	}
-
-	return (
-		values.reduce(
-			(sum, value) => sum + value,
-			0,
-		) / values.length
-	)
-}
-
-/**
- * Calculate maximum value.
- */
-function calculateMax(
-	values: number[],
-): number | undefined {
-	if (!values.length) {
-		return undefined
-	}
-
-	return Math.max(...values)
-}
-
-/**
- * Calculate maximum instantaneous speed from
- * consecutive GPS points.
+ * Calculate maximum instantaneous GPS speed.
  *
  * Returns meters/second.
  */
 function calculateMaxSpeed(
 	points: TrackPoint[],
 ): number {
-	let maxSpeed = 0
+	let maxSpeed = 0;
 
 	for (let i = 1; i < points.length; i++) {
-		const previous = points[i - 1]
-		const current = points[i]
+		const previous = points[i - 1];
+		const current = points[i];
 
 		if (
 			!previous.timestamp ||
 			!current.timestamp
 		) {
-			continue
+			continue;
 		}
 
 		const elapsedSeconds =
 			(current.timestamp.getTime() -
 				previous.timestamp.getTime()) /
-			1000
+			1000;
 
 		if (elapsedSeconds <= 0) {
-			continue
+			continue;
 		}
 
 		const distance = haversineDistance(
@@ -427,327 +325,171 @@ function calculateMaxSpeed(
 			previous.longitude,
 			current.latitude,
 			current.longitude,
-		)
+		);
 
 		const speed =
-			distance / elapsedSeconds
+			distance / elapsedSeconds;
 
-		maxSpeed = Math.max(
-			maxSpeed,
-			speed,
-		)
+		maxSpeed = Math.max(maxSpeed, speed);
 	}
 
-	return maxSpeed
+	return maxSpeed;
 }
 
 /**
- * Calculate Normalized Power.
- *
- * Uses a 30-point rolling average followed by
- * the fourth-power calculation.
- *
- * Note:
- * This assumes the GPX contains reasonably
- * consistent power sampling.
+ * Calculate average value.
  */
-function calculateNormalizedPower(
-	points: TrackPoint[],
-): number | undefined {
-	const powerPoints = points.filter(
-		(
-			point,
-		): point is TrackPoint & {
-			power: number
-		} => point.power !== undefined,
-	)
-
-	if (powerPoints.length < 30) {
-		return undefined
+function calculateAverage(
+	values: number[],
+): number | null {
+	if (!values.length) {
+		return null;
 	}
 
-	const rollingPowers: number[] = []
-
-	for (
-		let i = 29;
-		i < powerPoints.length;
-		i++
-	) {
-		const window =
-			powerPoints.slice(
-				i - 29,
-				i + 1,
-			)
-
-		const average =
-			window.reduce(
-				(sum, point) =>
-					sum + point.power,
-				0,
-			) / window.length
-
-		rollingPowers.push(
-			average,
-		)
-	}
-
-	if (!rollingPowers.length) {
-		return undefined
-	}
-
-	const fourthPowerAverage =
-		rollingPowers.reduce(
-			(sum, power) =>
-				sum + power ** 4,
+	return (
+		values.reduce(
+			(sum, value) => sum + value,
 			0,
-		) / rollingPowers.length
-
-	return fourthPowerAverage ** 0.25
+		) / values.length
+	);
 }
 
 /**
- * Calculate power in fixed-duration blocks.
- *
- * Defaults to 5-minute blocks.
+ * Calculate maximum value.
  */
-function calculatePowerBlocks(
-	points: TrackPoint[],
-	blockDurationSeconds = 300,
-): PowerBlock[] {
-	const powerPoints = points.filter(
-		(
-			point,
-		): point is TrackPoint & {
-			power: number
-			timestamp: Date
-		} =>
-			point.power !== undefined &&
-			point.timestamp !== undefined,
-	)
-
-	if (!powerPoints.length) {
-		return []
+function calculateMax(
+	values: number[],
+): number | null {
+	if (!values.length) {
+		return null;
 	}
 
-	const startTime =
-		powerPoints[0].timestamp.getTime()
-
-	const blocks = new Map<
-		number,
-		number[]
-	>()
-
-	for (const point of powerPoints) {
-		const elapsedSeconds =
-			(point.timestamp.getTime() -
-				startTime) /
-			1000
-
-		const blockIndex =
-			Math.floor(
-				elapsedSeconds /
-					blockDurationSeconds,
-			)
-
-		const existing =
-			blocks.get(blockIndex) ?? []
-
-		existing.push(point.power)
-
-		blocks.set(
-			blockIndex,
-			existing,
-		)
-	}
-
-	return Array.from(
-		blocks.entries(),
-	).map(
-		([
-			blockIndex,
-			powers,
-		]) => ({
-			startSeconds:
-				blockIndex *
-				blockDurationSeconds,
-
-			endSeconds:
-				(blockIndex + 1) *
-				blockDurationSeconds,
-
-			averagePower:
-				powers.reduce(
-					(sum, power) =>
-						sum + power,
-					0,
-				) /
-				powers.length,
-
-			maxPower: Math.max(
-				...powers,
-			),
-		}),
-	)
+	return Math.max(...values);
 }
 
 /**
- * Analyze a GPX file.
+ * Analyze a GPX file and return the normalized
+ * RideData format used by both GPX and FIT.
  */
 export function analyzeGpx(
 	xml: string,
-): RideSummary {
-	const points =
-		parseTrackPoints(xml)
+): RideData {
+	const points = parseTrackPoints(xml);
 
 	if (points.length < 2) {
 		throw new Error(
-			'GPX file does not contain enough track points',
-		)
+			"GPX file does not contain enough track points",
+		);
 	}
 
 	const durationSeconds =
-		calculateDuration(points)
+		calculateDuration(points);
 
 	const distanceMeters =
-		calculateDistance(points)
-
-	const distance =
-		createDistanceMetrics(
-			distanceMeters,
-		)
+		calculateDistance(points);
 
 	const elevation =
-		calculateElevation(points)
+		calculateElevation(points);
 
-	const elevationGain =
-		createElevationMetrics(
-			elevation.gain,
-		)
-
-	const elevationLoss =
-		createElevationMetrics(
-			elevation.loss,
-		)
-
-	/*
-	 * Average speed.
-	 */
 	const averageSpeedMps =
 		durationSeconds > 0
-			? distanceMeters /
-				durationSeconds
-			: 0
-
-	const averageSpeed =
-		createSpeedMetrics(
-			averageSpeedMps,
-		)
-
-	/*
-	 * Maximum speed.
-	 */
-	const maxSpeedMps =
-		calculateMaxSpeed(points)
-
-	const maxSpeed =
-		createSpeedMetrics(
-			maxSpeedMps,
-		)
+			? distanceMeters / durationSeconds
+			: 0;
 
 	/*
 	 * Power.
 	 */
-	const power = points
+	const powerSamples = points
 		.map((point) => point.power)
 		.filter(
 			(value): value is number =>
 				value !== undefined,
-		)
+		);
 
 	const averagePower =
-		calculateAverage(power)
+		calculateAverage(powerSamples);
 
 	const maxPower =
-		calculateMax(power)
-
-	const normalizedPower =
-		calculateNormalizedPower(
-			points,
-		)
+		calculateMax(powerSamples);
 
 	/*
 	 * Cadence.
 	 */
-	const cadence = points
+	const cadenceSamples = points
 		.map((point) => point.cadence)
 		.filter(
 			(value): value is number =>
 				value !== undefined,
-		)
+		);
 
 	const averageCadence =
-		calculateAverage(cadence)
+		calculateAverage(cadenceSamples);
 
 	const maxCadence =
-		calculateMax(cadence)
+		calculateMax(cadenceSamples);
 
 	/*
 	 * Heart rate.
 	 */
-	const heartRate = points
-		.map(
-			(point) => point.heartRate,
-		)
+	const heartRateSamples = points
+		.map((point) => point.heartRate)
 		.filter(
 			(value): value is number =>
 				value !== undefined,
-		)
+		);
 
 	const averageHeartRate =
-		calculateAverage(
-			heartRate,
-		)
+		calculateAverage(heartRateSamples);
 
 	const maxHeartRate =
-		calculateMax(heartRate)
+		calculateMax(heartRateSamples);
+
+	/*
+	 * Speed.
+	 */
+	const maxSpeedMps =
+		calculateMaxSpeed(points);
 
 	/*
 	 * Work.
 	 *
-	 * Watts × seconds = joules
-	 *
+	 * Watts × seconds = joules.
 	 * Divide by 1000 for kJ.
+	 *
+	 * This is an estimate because GPX files don't
+	 * necessarily contain a power sample for every
+	 * second.
 	 */
 	const workKj =
-		averagePower !== undefined
-			? (averagePower *
-					durationSeconds) /
+		averagePower !== null
+			? (averagePower * durationSeconds) /
 				1000
-			: undefined
-
-	/*
-	 * Power blocks.
-	 */
-	const powerBlocks =
-		calculatePowerBlocks(
-			points,
-			300,
-		)
+			: null;
 
 	return {
+		source: "gpx",
+
+		distanceMiles:
+			distanceMeters / 1609.344,
+
 		durationSeconds,
 
-		distance,
+		/*
+		 * GPX doesn't provide a reliable equivalent
+		 * to FIT's timer time, so use elapsed time.
+		 */
+		movingTimeSeconds: durationSeconds,
 
-		averageSpeed,
-		maxSpeed,
-
-		elevationGain,
-		elevationLoss,
+		averageSpeedMph:
+			averageSpeedMps * 2.236936,
 
 		averagePower,
 		maxPower,
-		normalizedPower,
+
+		normalizedPower:
+			calculateNormalizedPower(
+				powerSamples,
+			),
 
 		averageCadence,
 		maxCadence,
@@ -755,10 +497,109 @@ export function analyzeGpx(
 		averageHeartRate,
 		maxHeartRate,
 
-		workKj,
+		elevationGainFeet:
+			elevation.gain * 3.28084,
 
-		powerBlocks,
+		calories: null,
 
-		points,
-	}
+		zeroPowerSeconds:
+			powerSamples.filter(
+				(power) => power === 0,
+			).length,
+
+		bestPower: {
+			oneMinute:
+				calculateBestAverage(
+					powerSamples,
+					60,
+				),
+
+			fiveMinutes:
+				calculateBestAverage(
+					powerSamples,
+					300,
+				),
+
+			tenMinutes:
+				calculateBestAverage(
+					powerSamples,
+					600,
+				),
+
+			twentyMinutes:
+				calculateBestAverage(
+					powerSamples,
+					1200,
+				),
+		},
+
+		powerPercentiles:
+			calculatePowerPercentiles(
+				powerSamples,
+			),
+
+		timestamps: points
+			.map((point) => point.timestamp)
+			.filter(
+				(value): value is Date =>
+					value instanceof Date,
+			),
+
+		powerSamples,
+		cadenceSamples,
+
+		/*
+		 * GPX doesn't normally contain speed samples,
+		 * so derive instantaneous speed from GPS points.
+		 */
+		speedSamples: points
+			.slice(1)
+			.map((point, index) => {
+				const previous =
+					points[index];
+
+				if (
+					!previous.timestamp ||
+					!point.timestamp
+				) {
+					return null;
+				}
+
+				const elapsedSeconds =
+					(point.timestamp.getTime() -
+						previous.timestamp.getTime()) /
+					1000;
+
+				if (elapsedSeconds <= 0) {
+					return null;
+				}
+
+				const distance =
+					haversineDistance(
+						previous.latitude,
+						previous.longitude,
+						point.latitude,
+						point.longitude,
+					);
+
+				return (
+					distance /
+					elapsedSeconds *
+					2.236936
+				);
+			})
+			.filter(
+				(value): value is number =>
+					value !== null &&
+					Number.isFinite(value),
+			),
+
+		heartRateSamples,
+
+		/*
+		 * Keep the unused values intentionally out of
+		 * RideData. GPX-specific GPS information can be
+		 * added later if the UI needs it.
+		 */
+	};
 }
