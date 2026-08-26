@@ -1,12 +1,6 @@
 import { WeatherBar } from "@/components/dashboard/WeatherBar";
-import { getWeather } from "@/lib/weather";
 
-export default async function DashboardPage() {
-	const latitude = 28.390556;
-	const longitude = -81.380278;
-
-	const weather = await getWeather(latitude, longitude);
-
+export default function DashboardPage() {
 	return (
 		<main className="mx-auto w-full max-w-6xl space-y-6 p-6">
 			<div>
@@ -19,12 +13,7 @@ export default async function DashboardPage() {
 				</p>
 			</div>
 
-			<WeatherBar
-				current={weather.current}
-				hourly={weather.hourly}
-				daily={weather.daily}
-				locationName="Orlando"
-			/>
+			<WeatherBar />
 
 			<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 				{/* Future dashboard cards */}

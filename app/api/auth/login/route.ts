@@ -2,7 +2,7 @@ import { adminAuth } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-const SESSION_DURATION = 60 * 60 * 24 * 5 * 1000; // 5 days
+const SESSION_DURATION = 60 * 60 * 24 * 14 * 1000; // 14 days
 
 export async function POST(request: Request) {
 	try {
