@@ -129,7 +129,7 @@ function HourlyView({ hourly }: { hourly: HourlyWeather[] }) {
   return (
     <div className="overflow-x-auto">
       <div className="flex min-w-max gap-2">
-        {hourly.slice(0, 8).map((period) => (
+        {hourly.slice(0, 24).map((period) => (
           <div
             key={period.startTime}
             className="flex w-20 flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center"
