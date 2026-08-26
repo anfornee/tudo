@@ -1,27 +1,24 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function proxy(request: NextRequest) {
-  const session = request.cookies.get("session")?.value;
-  const { pathname } = request.nextUrl;
+export function proxy(request: NextRequest) {
+	const session = request.cookies.get("session")?.value;
+	const { pathname } = request.nextUrl;
 
-  if (!session && pathname.startsWith("/dashboard")) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname); 
-    return NextResponse.redirect(loginUrl);
-  }
+	if (pathname.startsWith("/dashboard") && !session) {
+		return NextResponse.redirect(
+			new URL("/login", request.url)
+		);
+	}
 
-  if (session && (pathname === "/login" || pathname === "/signup")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+	if (pathname === "/login" && session) {
+		return NextResponse.redirect(
+			new URL("/dashboard", request.url)
+		);
+	}
 
-  return NextResponse.next();
+	return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/login",
-    "/signup",
-  ],
+	matcher: ["/login", "/dashboard/:path*"],
 };
