@@ -1,12 +1,12 @@
-'use client'
+import { getCurrentUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+export default async function HomePage() {
+	const user = await getCurrentUser();
 
-export default function Home() {
-  return (
-    <main>
-      <h1>hello there...</h1>
-      <Button onClick={() => console.log('clicked')}>Click me</Button>
-    </main>
-  );
+	if (user) {
+		redirect("/dashboard");
+	}
+
+	redirect("/login");
 }
