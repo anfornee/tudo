@@ -205,7 +205,7 @@ async function getHourlyForecast(
 		);
 
 	return forecast.properties.periods
-		.slice(0, 12)
+		.slice(0, 24)
 		.map((period) => ({
 			startTime: period.startTime,
 			temperature: period.temperature,
