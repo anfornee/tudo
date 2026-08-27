@@ -59,7 +59,9 @@ export function SudokuBoard({
         const isMatching = selectedValue !== 0 && value === selectedValue;
 
         const isIncorrect =
-          !isGiven && value !== 0 && "font-semibold text-primary brightness-125";
+          !isGiven &&
+          value !== 0 &&
+          "font-semibold text-primary brightness-125";
 
         const hasRightBoxBorder = column === 2 || column === 5;
 
@@ -85,13 +87,19 @@ export function SudokuBoard({
               isRelated && !isSelected && "bg-muted/60",
               isMatching && !isSelected && "bg-accent",
               isSelected && "bg-primary/15",
-              isGiven && "font-semibold",
-              !isGiven && value !== 0 && "text-primary",
-              isIncorrect && "text-destructive",
             )}
           >
             {value !== 0 ? (
-              <span>{value}</span>
+              <span
+                className={classNames(
+                  "font-semibold",
+                  isGiven && "text-foreground",
+                  !isGiven && !isIncorrect && "!text-sky-300",
+                  isIncorrect && "!text-red-500",
+                )}
+              >
+                {value}
+              </span>
             ) : (
               <div className="grid size-full grid-cols-3 grid-rows-3 p-[2px] sm:p-1">
                 {Array.from({ length: 9 }, (_, noteIndex) => {
