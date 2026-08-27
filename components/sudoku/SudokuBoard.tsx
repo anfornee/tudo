@@ -42,7 +42,7 @@ export function SudokuBoard({
 
   return (
     <div
-      className="grid aspect-square w-full grid-cols-9 overflow-hidden rounded-lg border-2 border-foreground/70 bg-border"
+      className="grid w-full grid-cols-[repeat(9,minmax(0,1fr))] overflow-hidden rounded-lg border-2 border-foreground/70 bg-border"
       role="grid"
       aria-label="Sudoku board"
     >
@@ -76,7 +76,7 @@ export function SudokuBoard({
             aria-selected={isSelected}
             onClick={() => onSelect(index)}
             className={classNames(
-              "relative flex aspect-square min-w-0 items-center justify-center bg-background text-lg transition-colors sm:text-xl md:text-2xl",
+              "relative flex aspect-square min-w-0 overflow-hidden items-center justify-center bg-background text-lg transition-colors sm:text-xl md:text-2xl",
               "focus:z-10 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset",
               column !== 8 && "border-r border-border",
               row !== 8 && "border-b border-border",
@@ -99,7 +99,7 @@ export function SudokuBoard({
                 {value}
               </span>
             ) : (
-              <div className="grid size-full grid-cols-3 grid-rows-3 p-[2px] sm:p-1">
+              <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 p-[2px] sm:p-1">
                 {Array.from({ length: 9 }, (_, noteIndex) => {
                   const number = noteIndex + 1;
 
