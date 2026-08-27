@@ -59,9 +59,7 @@ export function SudokuBoard({
         const isMatching = selectedValue !== 0 && value === selectedValue;
 
         const isIncorrect =
-          !isGiven &&
-          value !== 0 &&
-          "font-semibold text-primary brightness-125";
+          !isGiven && value !== 0 && value !== solution[index];
 
         const hasRightBoxBorder = column === 2 || column === 5;
 
