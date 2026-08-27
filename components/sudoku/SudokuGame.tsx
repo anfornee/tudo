@@ -147,9 +147,25 @@ export function SudokuGame() {
     [game],
   );
 
+  const numberCounts = useMemo(() => {
+    const counts = Array.from({ length: 10 }, () => 0);
+
+    for (const value of values) {
+      if (value >= 1 && value <= 9) {
+        counts[value] += 1;
+      }
+    }
+
+    return counts;
+  }, [values]);
+
   const enterNumber = useCallback(
     (number: number) => {
       if (!game || selectedIndex === null || completed) {
+        return;
+      }
+
+      if (!notesMode && numberCounts[number] >= 9) {
         return;
       }
 
@@ -207,7 +223,7 @@ export function SudokuGame() {
         return nextNotes;
       });
     },
-    [completed, game, isSolved, notesMode, selectedIndex, values],
+    [completed, game, isSolved, notesMode, numberCounts, selectedIndex, values],
   );
 
   const eraseSelected = useCallback(() => {
@@ -401,18 +417,22 @@ export function SudokuGame() {
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2">
               {Array.from({ length: 9 }, (_, index) => index + 1).map(
-                (number) => (
-                  <Button
-                    key={number}
-                    type="button"
-                    variant="outline"
-                    className="h-12 text-lg font-semibold"
-                    disabled={completed}
-                    onClick={() => enterNumber(number)}
-                  >
-                    {number}
-                  </Button>
-                ),
+                (number) => {
+                  const isComplete = numberCounts[number] >= 9;
+
+                  return (
+                    <Button
+                      key={number}
+                      type="button"
+                      variant="outline"
+                      className="h-12 text-lg font-semibold"
+                      disabled={completed || isComplete}
+                      onClick={() => enterNumber(number)}
+                    >
+                      {number}
+                    </Button>
+                  );
+                },
               )}
             </div>
 
