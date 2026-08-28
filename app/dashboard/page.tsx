@@ -3,7 +3,7 @@ import { WeatherBar } from "@/components/dashboard/WeatherBar";
 
 export default function DashboardPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 p-6">
+    <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
 

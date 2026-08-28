@@ -2,7 +2,7 @@ import { SudokuGame } from "@/components/sudoku/SudokuGame";
 
 export default function SudokuPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 p-6">
+    <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Sudoku</h1>
 

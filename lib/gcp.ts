@@ -1,11 +1,22 @@
 import { Storage } from '@google-cloud/storage';
+import {
+  configureFirebaseAdminEmulators,
+  isFirebaseEmulatorEnvironment,
+  localFirebaseProjectId,
+} from '@/lib/firebase-environment';
 
-const storage = new Storage({
-  projectId: process.env.GCP_PROJECT_ID,
-  credentials: {
-    client_email: process.env.GCP_CLIENT_EMAIL,
-    private_key: process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, '\n'), // Fixes potential newline formatting issues
-  },
-});
+configureFirebaseAdminEmulators();
+
+const storage = new Storage(
+  isFirebaseEmulatorEnvironment
+    ? { projectId: localFirebaseProjectId }
+    : {
+        projectId: process.env.GCP_PROJECT_ID,
+        credentials: {
+          client_email: process.env.GCP_CLIENT_EMAIL,
+          private_key: process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        },
+      }
+);
 
 export { storage };

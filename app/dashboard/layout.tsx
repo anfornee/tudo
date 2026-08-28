@@ -1,16 +1,9 @@
-import { getCurrentUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { AuthenticatedAppLayout } from "@/components/authenticated-app-layout";
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
 	children,
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
-	const user = await getCurrentUser();
-
-	if (!user) {
-		redirect("/login");
-	}
-
-	return <>{children}</>;
+	return <AuthenticatedAppLayout>{children}</AuthenticatedAppLayout>;
 }
