@@ -146,6 +146,19 @@ Do not invent calculated values unless the calculation is explicit, deterministi
 
 Keep parsing, normalization, analysis, and presentation separate when practical.
 
+### Firestore Persistence
+
+Keep user-owned Firestore data scoped beneath the authenticated UID and keep
+persistence code within the relevant feature domain. Update security rules with
+every new persisted path; never weaken rules to unblock development. Consult the
+relevant feature documentation before changing a persisted structure.
+
+### Browser Location
+
+Use the shared Weather current-location abstraction. Do not add independent
+browser geolocation calls to components or confuse locally cached device
+location with Firestore-saved places.
+
 ## UX Philosophy
 
 This is a personal application, so usefulness and speed matter more than enterprise complexity.

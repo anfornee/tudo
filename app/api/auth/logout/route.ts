@@ -1,11 +1,20 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+async function clearSessionCookie() {
+	const cookieStore = await cookies();
+	cookieStore.delete("session");
+}
+
+export async function GET(request: Request) {
+	await clearSessionCookie();
+
+	return NextResponse.redirect(new URL("/login", request.url));
+}
+
 export async function POST() {
 	try {
-		const cookieStore = await cookies();
-
-		cookieStore.delete("session");
+		await clearSessionCookie();
 
 		return NextResponse.json({ status: "success" }, { status: 200 });
 	} catch (error) {

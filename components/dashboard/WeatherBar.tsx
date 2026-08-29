@@ -16,6 +16,7 @@ import {
   Wind,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   Select,
@@ -24,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCurrentWeatherLocation } from "@/components/weather/useCurrentWeatherLocation";
 
 import type {
   CurrentWeather,
@@ -33,6 +35,15 @@ import type {
 } from "@/lib/weather";
 
 type WeatherView = "current" | "hourly" | "daily";
+
+interface WeatherBarProps {
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  locationLabel?: string;
+  linkToWeatherPage?: boolean;
+}
 
 function WeatherIcon({
   condition,
@@ -127,7 +138,7 @@ function CurrentView({ current }: { current: CurrentWeather }) {
 
 function HourlyView({ hourly }: { hourly: HourlyWeather[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" data-weather-scroll>
       <div className="flex min-w-max gap-2">
         {hourly.slice(0, 24).map((period) => (
           <div
@@ -183,7 +194,13 @@ function DailyView({ daily }: { daily: DailyWeather[] }) {
   );
 }
 
-export function WeatherBar() {
+export function WeatherBar({
+  coordinates,
+  locationLabel,
+  linkToWeatherPage = false,
+}: WeatherBarProps = {}) {
+  const router = useRouter();
+  const currentLocation = useCurrentWeatherLocation(!coordinates);
   const [view, setView] = useState<WeatherView>("current");
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -195,16 +212,18 @@ export function WeatherBar() {
   const [error, setError] = useState<string | null>(null);
 
   const isMounted = useRef(true);
+  const resolvedLatitude = coordinates?.latitude ?? currentLocation.location?.latitude;
+  const resolvedLongitude =
+    coordinates?.longitude ?? currentLocation.location?.longitude;
+  const locationVersion = coordinates
+    ? `${coordinates.latitude},${coordinates.longitude}`
+    : currentLocation.location?.updatedAt;
 
-  const loadWeather = useCallback(async (backgroundRefresh = false) => {
-    if (!navigator.geolocation) {
-      setError("Location is not supported by this device.");
-
-      setLoading(false);
-
-      return;
-    }
-
+  const fetchWeather = useCallback(async (
+    latitude: number,
+    longitude: number,
+    backgroundRefresh = false,
+  ) => {
     if (backgroundRefresh) {
       setRefreshing(true);
     } else {
@@ -213,87 +232,86 @@ export function WeatherBar() {
 
     setError(null);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const response = await fetch("/api/weather", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            }),
-          });
+    try {
+      const response = await fetch("/api/weather", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ latitude, longitude }),
+      });
 
-          if (!response.ok) {
-            throw new Error("Weather request failed.");
-          }
+      if (!response.ok) {
+        throw new Error("Weather request failed.");
+      }
 
-          const data = (await response.json()) as WeatherData;
+      const data = (await response.json()) as WeatherData;
 
-          if (!isMounted.current) {
-            return;
-          }
+      if (isMounted.current) {
+        setWeather(data);
+      }
+    } catch (error) {
+      console.error("Unable to load weather:", error);
 
-          setWeather(data);
-        } catch (error) {
-          console.error("Unable to load weather:", error);
-
-          if (isMounted.current) {
-            setError("Unable to load weather.");
-          }
-        } finally {
-          if (isMounted.current) {
-            setLoading(false);
-            setRefreshing(false);
-          }
-        }
-      },
-      (error) => {
-        console.error("Unable to retrieve location:", error);
-
-        if (!isMounted.current) {
-          return;
-        }
-
-        if (error.code === error.PERMISSION_DENIED) {
-          setError("Location permission is needed to show local weather.");
-        } else {
-          setError("Unable to determine your location.");
-        }
-
+      if (isMounted.current) {
+        setError("Unable to load weather.");
+      }
+    } finally {
+      if (isMounted.current) {
         setLoading(false);
         setRefreshing(false);
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 10_000,
-        maximumAge: 5 * 60 * 1000,
-      },
-    );
+      }
+    }
   }, []);
 
   useEffect(() => {
     isMounted.current = true;
 
-    loadWeather();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        loadWeather(true);
-      }
+    return () => {
+      isMounted.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (
+      resolvedLatitude === undefined ||
+      resolvedLongitude === undefined ||
+      locationVersion === undefined
+    ) {
+      return;
+    }
+
+    const initialLoad = window.setTimeout(
+      () => void fetchWeather(resolvedLatitude, resolvedLongitude),
+      0,
+    );
+
+    return () => window.clearTimeout(initialLoad);
+  }, [fetchWeather, locationVersion, resolvedLatitude, resolvedLongitude]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (
+        document.visibilityState === "visible" &&
+        resolvedLatitude !== undefined &&
+        resolvedLongitude !== undefined
+      ) {
+        void fetchWeather(resolvedLatitude, resolvedLongitude, true);
+      }
+    }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      isMounted.current = false;
-
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadWeather]);
+  }, [fetchWeather, resolvedLatitude, resolvedLongitude]);
+
+  const locationMessage = coordinates ? null : currentLocation.message;
+  const displayLoading = coordinates
+    ? loading
+    : currentLocation.loading || (loading && currentLocation.location !== null);
+  const displayRefreshing = refreshing || currentLocation.refreshing;
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
@@ -302,46 +320,83 @@ export function WeatherBar() {
           <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
 
           <p className="truncate text-sm font-medium">
-            {weather?.locationName ?? "Local weather"}
+            {locationLabel ?? weather?.locationName ?? "Local weather"}
           </p>
 
           <button
             type="button"
-            onClick={() => loadWeather(true)}
-            disabled={refreshing}
-            aria-label="Refresh weather"
-            title="Refresh weather"
+            onClick={() => {
+              if (coordinates) {
+                void fetchWeather(
+                  coordinates.latitude,
+                  coordinates.longitude,
+                  true,
+                );
+              } else {
+                void currentLocation.refresh();
+              }
+            }}
+            disabled={displayRefreshing}
+            aria-label={
+              coordinates ? "Refresh weather" : "Refresh current location"
+            }
+            title={
+              coordinates ? "Refresh weather" : "Refresh current location"
+            }
             className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             <RefreshCw
-              className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+              className={`size-3.5 ${displayRefreshing ? "animate-spin" : ""}`}
             />
           </button>
         </div>
 
-        <Select
-          value={view}
-          onValueChange={(value) => setView(value as WeatherView)}
-          disabled={!weather}
-        >
-          <SelectTrigger className="h-8 w-[120px]" aria-label="Weather view">
-            <SelectValue />
-          </SelectTrigger>
+        <div className="flex shrink-0 items-center gap-1">
+          <Select
+            value={view}
+            onValueChange={(value) => setView(value as WeatherView)}
+            disabled={!weather}
+          >
+            <SelectTrigger className="h-8 w-[120px]" aria-label="Weather view">
+              <SelectValue />
+            </SelectTrigger>
 
-          <SelectContent>
-            <SelectItem value="current">Current</SelectItem>
+            <SelectContent>
+              <SelectItem value="current">Current</SelectItem>
 
-            <SelectItem value="hourly">Hourly</SelectItem>
+              <SelectItem value="hourly">Hourly</SelectItem>
 
-            <SelectItem value="daily">5 Days</SelectItem>
-          </SelectContent>
-        </Select>
+              <SelectItem value="daily">5 Days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="relative min-h-28 px-5 py-4">
+      <div
+        role={linkToWeatherPage ? "link" : undefined}
+        tabIndex={linkToWeatherPage ? 0 : undefined}
+        onClick={
+          linkToWeatherPage ? () => router.push("/weather") : undefined
+        }
+        onKeyDown={
+          linkToWeatherPage
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push("/weather");
+                }
+              }
+            : undefined
+        }
+        className={`relative min-h-28 px-5 py-4 ${
+          linkToWeatherPage
+            ? "cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            : ""
+        }`}
+      >
         <div
           className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-            loading && !weather
+            displayLoading && !weather
               ? "opacity-100"
               : "pointer-events-none opacity-0"
           }`}
@@ -365,10 +420,18 @@ export function WeatherBar() {
           {weather && view === "daily" && <DailyView daily={weather.daily} />}
         </div>
 
-        {error && !weather && !loading && (
+        {(error || locationMessage) && !weather && !displayLoading && (
           <div className="flex min-h-20 items-center justify-center text-center">
-            <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {error ?? locationMessage}
+            </p>
           </div>
+        )}
+
+        {locationMessage && weather && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {locationMessage}
+          </p>
         )}
       </div>
     </section>

@@ -239,6 +239,14 @@ Examples:
 
 Persistence models should reflect actual domain requirements rather than forcing every feature into one generic schema.
 
+### Firestore Convention
+
+User-owned Firestore data lives beneath `users/{uid}` and security rules enforce
+that the authenticated UID owns the path. Each feature domain owns its small,
+typed persistence layer; React components should not scatter raw Firestore path
+construction. This is a domain data-access convention, not a generic repository
+framework. New persisted paths and their security rules must evolve together.
+
 ## Utility Functions
 
 Utility functions should:
@@ -249,6 +257,13 @@ Utility functions should:
 * Remain easy to test
 
 Financial calculations and ride analytics are especially good candidates for pure functions.
+
+### Browser Location
+
+Weather consumers share the Weather-domain current-location service and hook.
+They must not call browser geolocation independently. The service owns local
+last-known-location caching, permission checks, and concurrent-request
+deduplication; Firestore-saved places remain a separate concept.
 
 ## Performance
 

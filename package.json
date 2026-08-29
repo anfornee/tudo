@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "emulators": "firebase emulators:start --project tudo-local",
+    "emulators": "firebase emulators:start --project tudo-local --import=.firebase-emulator-data --export-on-exit=.firebase-emulator-data",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

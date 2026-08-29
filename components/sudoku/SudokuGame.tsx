@@ -380,8 +380,44 @@ export function SudokuGame() {
       onKeyDown={handleKeyDown}
       className="outline-none"
     >
+      {completed && (
+        <section className="mt-4 mb-4 rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <Sparkles className="size-5" />
+              </div>
+
+              <div>
+                <h2 className="font-semibold">Puzzle complete!</h2>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You finished this{" "}
+                  {difficultyLabel(game.difficulty).toLowerCase()} puzzle in{" "}
+                  {formatTime(elapsedSeconds)}.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => {
+                setGame(null);
+                setValues([]);
+                setNotes(EMPTY_NOTES());
+                setSelectedIndex(null);
+                setCompleted(false);
+                setElapsedSeconds(0);
+              }}
+            >
+              Play another
+            </Button>
+          </div>
+        </section>
+      )}
+
       <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between border-b px-5 py-3">
           <div className="flex items-center gap-3">
             <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium">
               {difficultyLabel(game.difficulty)}
@@ -406,6 +442,7 @@ export function SudokuGame() {
               solution={game.solution}
               notes={notes}
               selectedIndex={selectedIndex}
+              completed={completed}
               onSelect={(index) => {
                 setSelectedIndex(index);
 
@@ -458,16 +495,6 @@ export function SudokuGame() {
               </Button>
             </div>
 
-            <div className="rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
-              <p>
-                <strong className="font-medium text-foreground">
-                  Keyboard:
-                </strong>{" "}
-                1–9 to enter, N for notes, Delete to erase and arrow keys to
-                move.
-              </p>
-            </div>
-
             <div className="grid gap-2">
               <Button type="button" variant="outline" onClick={restartGame}>
                 <RotateCcw className="size-4" />
@@ -492,42 +519,6 @@ export function SudokuGame() {
           </div>
         </div>
       </section>
-
-      {completed && (
-        <section className="mt-4 rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <Sparkles className="size-5" />
-              </div>
-
-              <div>
-                <h2 className="font-semibold">Puzzle complete!</h2>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  You finished this{" "}
-                  {difficultyLabel(game.difficulty).toLowerCase()} puzzle in{" "}
-                  {formatTime(elapsedSeconds)}.
-                </p>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              onClick={() => {
-                setGame(null);
-                setValues([]);
-                setNotes(EMPTY_NOTES());
-                setSelectedIndex(null);
-                setCompleted(false);
-                setElapsedSeconds(0);
-              }}
-            >
-              Play another
-            </Button>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

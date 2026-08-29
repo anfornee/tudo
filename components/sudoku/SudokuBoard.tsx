@@ -6,6 +6,7 @@ interface SudokuBoardProps {
   solution: number[];
   notes: number[][];
   selectedIndex: number | null;
+  completed: boolean;
   onSelect: (index: number) => void;
 }
 
@@ -36,6 +37,7 @@ export function SudokuBoard({
   solution,
   notes,
   selectedIndex,
+  completed,
   onSelect,
 }: SudokuBoardProps) {
   const selectedValue = selectedIndex !== null ? values[selectedIndex] : 0;
@@ -87,10 +89,18 @@ export function SudokuBoard({
               isSelected && "bg-primary/15",
             )}
           >
+            {completed && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 animate-in bg-primary/20 fade-in-0 duration-500 motion-reduce:animate-none"
+                style={{ animationDelay: `${(row + column) * 45}ms` }}
+              />
+            )}
+
             {value !== 0 ? (
               <span
                 className={classNames(
-                  "font-semibold",
+                  "relative font-semibold",
                   isGiven && "text-foreground",
                   !isGiven && !isIncorrect && "!text-sky-300",
                   isIncorrect && "!text-red-500",

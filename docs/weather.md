@@ -22,7 +22,44 @@ The module should make it easy to understand:
 
 ## Dashboard Integration
 
-Weather should expose reusable data and components so the main dashboard can display a smaller weather summary.
+The dashboard Weather bar always uses the device's current location. It does not
+substitute a saved city or automatically persist the current coordinates.
+
+Clicking the main forecast surface navigates to the full Weather page. The
+refresh and forecast-view controls remain independent and do not trigger
+navigation.
+
+## Current Location Resolution
+
+Dashboard Weather and the full Weather page use the same current-location hook
+and Weather-domain browser service. Components must not call
+`navigator.geolocation` independently. The service deduplicates concurrent
+location requests so navigation or multiple mounted consumers cannot create
+multiple prompts.
+
+The last successful device location is stored locally under
+`tudo:weather:last-location` as latitude, longitude, and an `updatedAt`
+millisecond timestamp. It is never written to Firestore. Malformed cache entries
+are discarded safely, and Weather still works when local storage is unavailable.
+
+Cached coordinates remain fresh for six hours. A cached location is displayed
+immediately even when stale:
+
+* Fresh cache avoids a geolocation request.
+* Stale cache refreshes in the background when permission is already granted.
+* With `prompt` permission, stale cache remains in use until the user explicitly
+  refreshes, avoiding a new prompt on every load.
+* With denied permission, cached coordinates remain usable and no automatic
+  retry occurs.
+* Without cached coordinates, Weather requests location unless permission is
+  already known to be denied.
+
+Where supported, the Permissions API checks geolocation state without prompting.
+Browsers such as Safari versions without a usable permission query gracefully
+fall back: cached coordinates are reused without an automatic prompt, while an
+initial location request is made only when no cache exists. The refresh icon on
+a current-location Weather bar explicitly requests fresh device coordinates;
+saved-location refresh icons only refresh weather for their stored coordinates.
 
 The dashboard version might contain:
 
@@ -32,7 +69,55 @@ The dashboard version might contain:
 * Precipitation chance
 * Short summary
 
-The full weather page can contain more detail.
+## Full Weather Page
+
+The full page shows current-location weather first, followed by one complete
+Weather bar for each saved location. Every bar loads its own conditions and
+forecast through the existing `/api/weather` route and has independent forecast
+view controls. A failure for one city does not prevent the other Weather bars
+from rendering.
+
+Users can add and remove saved locations without a confirmation workflow. A
+right-to-left swipe or long press on a saved Weather bar reveals its full-height
+delete action; swiping right or tapping the bar closes it. Saved locations are
+ordered by creation time, oldest first.
+
+## Location Search
+
+The add-location sheet debounces input, begins searching after three characters,
+and requires the user to choose a normalized result. Search uses Open-Meteo's
+geocoding API because the National Weather Service API does not provide location
+autocomplete. Results are restricted to the United States so their coordinates
+remain compatible with the existing NWS forecast provider.
+
+Open-Meteo supplies the stable location ID, city name, first-level region,
+country, and coordinates. Duplicate saved entries are prevented with its stable
+location ID. Search attribution is displayed in the add-location interface.
+
+## Firestore Persistence
+
+Saved places—not weather snapshots—are stored at:
+
+```text
+users/{uid}/weatherLocations/{provider}-{providerLocationId}
+```
+
+Each document contains:
+
+* `provider` (`"open-meteo"`)
+* `providerLocationId`
+* `name`
+* `region` (or `null`)
+* `country`
+* `countryCode`
+* `latitude`
+* `longitude`
+* `createdAt` (Firestore server timestamp)
+
+The Weather domain's persistence functions live in `lib/weather-locations.ts`.
+Firestore rules require the authenticated UID to match the path UID. Current
+device location is never written to this collection and does not count as a
+saved location.
 
 ## Data Architecture
 

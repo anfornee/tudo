@@ -11,7 +11,7 @@ export async function AuthenticatedAppLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login");
+    redirect("/api/auth/logout");
   }
 
   return (

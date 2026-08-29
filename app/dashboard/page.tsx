@@ -10,7 +10,7 @@ export default function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">Today at a glance.</p>
       </div>
 
-      <WeatherBar />
+      <WeatherBar linkToWeatherPage />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <SudokuBlock />

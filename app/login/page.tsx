@@ -43,8 +43,6 @@ export default function LoginPage() {
       throw new Error("Unable to create your session.");
     }
 
-    await auth.signOut();
-
     router.push("/dashboard");
     router.refresh();
   };

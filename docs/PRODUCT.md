@@ -113,6 +113,11 @@ It should emphasize:
 
 Weather data should also be reusable by the dashboard.
 
+The dashboard always emphasizes weather for the user's current device location.
+The full Weather page additionally supports per-user saved cities, displaying a
+forecast bar for each and allowing the user to search for, add, and remove
+locations that remain available across sessions.
+
 ### Sudoku
 
 A polished lightweight game available directly within the hub.
