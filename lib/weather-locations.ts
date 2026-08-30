@@ -8,6 +8,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase-client";
@@ -31,7 +32,7 @@ export async function getSavedWeatherLocations(
     query(weatherLocationsCollection(userId), orderBy("createdAt", "asc")),
   );
 
-  return snapshot.docs.map((locationDocument) => {
+  const locations = snapshot.docs.map((locationDocument) => {
     const data = locationDocument.data() as Omit<
       SavedWeatherLocation,
       "id"
@@ -40,13 +41,24 @@ export async function getSavedWeatherLocations(
     return {
       id: locationDocument.id,
       ...data,
+      sortOrder: Number.isFinite(data.sortOrder) ? data.sortOrder : null,
     };
+  });
+
+  return locations.sort((first, second) => {
+    const orderDifference =
+      (first.sortOrder ?? Number.POSITIVE_INFINITY) -
+      (second.sortOrder ?? Number.POSITIVE_INFINITY);
+
+    if (orderDifference !== 0) return orderDifference;
+    return (first.createdAt?.toMillis() ?? 0) - (second.createdAt?.toMillis() ?? 0);
   });
 }
 
 export async function addSavedWeatherLocation(
   userId: string,
   location: WeatherLocationSearchResult,
+  sortOrder: number,
 ): Promise<SavedWeatherLocation> {
   const id = locationDocumentId(location);
   const locationDocument = doc(weatherLocationsCollection(userId), id);
@@ -57,6 +69,7 @@ export async function addSavedWeatherLocation(
 
   const savedLocation = {
     ...location,
+    sortOrder,
     createdAt: serverTimestamp(),
   };
 
@@ -73,4 +86,19 @@ export async function removeSavedWeatherLocation(
   locationId: string,
 ): Promise<void> {
   await deleteDoc(doc(weatherLocationsCollection(userId), locationId));
+}
+
+export async function saveWeatherLocationOrder(
+  userId: string,
+  locationIds: readonly string[],
+): Promise<void> {
+  const batch = writeBatch(db);
+
+  locationIds.forEach((locationId, sortOrder) => {
+    batch.update(doc(weatherLocationsCollection(userId), locationId), {
+      sortOrder,
+    });
+  });
+
+  await batch.commit();
 }

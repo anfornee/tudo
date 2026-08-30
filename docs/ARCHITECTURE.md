@@ -247,6 +247,30 @@ typed persistence layer; React components should not scatter raw Firestore path
 construction. This is a domain data-access convention, not a generic repository
 framework. New persisted paths and their security rules must evolve together.
 
+### Ride Persistence
+
+The Rides domain owns activity import and persistence. FIT and GPX source files are
+parsed and normalized into `RideData`; a summary is stored beneath
+`users/{uid}/rides/{rideId}`, while the original activity is retained in Firebase
+Storage beneath the matching user and ride path. Raw source files, normalized
+summary data, and future derived analytics are separate concerns.
+
+Large timestamp and sensor-sample arrays are not stored in the Firestore summary.
+They can exceed practical document sizes and need a deliberate reprocessing or
+time-series storage strategy when detailed analytics are introduced.
+
+### Feature-Order Personalization
+
+The feature registry remains authoritative for feature availability and metadata.
+One per-user preference stores ordered feature IDs beneath the user's UID. The
+authenticated application shell resolves that order once and projects it through
+`showOnDashboard` for Dashboard and `showInNav` for Navigation. Dashboard is the
+editing surface; both projections update from the same shared state.
+
+Saved IDs are sanitized against the current registry. Stale IDs are ignored and
+newly registered features append automatically. Dashboard and Navigation must not
+introduce separate ordering preferences.
+
 ## Utility Functions
 
 Utility functions should:

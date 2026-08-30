@@ -98,6 +98,10 @@ Examples:
 
 The dashboard should prioritize information that is timely or actionable.
 
+Users can arrange dashboard features in their preferred order. That ordering is
+saved to their account, also personalizes primary navigation, and follows them
+across sessions and devices.
+
 ### Weather
 
 A practical weather experience intended to answer everyday questions quickly.
@@ -142,9 +146,13 @@ Useful questions include:
 
 ### Ride Tracker
 
-A cycling activity importer and analysis system focused heavily on Zwift and power-based training.
+A cycling activity importer that currently supports FIT and GPX files. Users can
+process an activity into a normalized summary, save it to their account, browse
+their ride history, and reopen saved summaries. Original files are preserved in
+Firebase Storage where configured so they can be reprocessed later.
 
-It should make activity files understandable rather than merely displaying raw metrics.
+Deeper analysis remains future direction. It should eventually make activity
+files understandable rather than merely displaying raw metrics.
 
 Useful questions include:
 

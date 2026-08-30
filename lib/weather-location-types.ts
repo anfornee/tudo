@@ -14,4 +14,5 @@ export interface WeatherLocationSearchResult {
 export interface SavedWeatherLocation extends WeatherLocationSearchResult {
   id: string;
   createdAt: Timestamp | null;
+  sortOrder: number | null;
 }

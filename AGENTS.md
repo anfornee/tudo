@@ -159,6 +159,13 @@ Use the shared Weather current-location abstraction. Do not add independent
 browser geolocation calls to components or confuse locally cached device
 location with Firestore-saved places.
 
+### Ride Data
+
+Reuse the existing FIT and GPX parsers and normalize imports into `RideData` before
+UI or persistence. Do not fabricate missing metrics. Keep user ride summaries
+UID-scoped in Firestore and original activity files UID-scoped in Storage. Do not
+put large sensor-sample arrays into Firestore without a deliberate storage design.
+
 ## UX Philosophy
 
 This is a personal application, so usefulness and speed matter more than enterprise complexity.
@@ -231,6 +238,13 @@ Potential dashboard content includes:
 * Other personally relevant information
 
 Dashboard widgets should consume domain data rather than owning domain logic.
+
+Dashboard ordering preferences store feature IDs only. Resolve them against the
+current feature registry so stale IDs cannot create features and newly registered
+dashboard features appear automatically without preference migrations.
+
+There is one persisted top-level feature order shared by Dashboard and Navigation.
+Do not add independent menu, mobile, desktop, or dashboard ordering preferences.
 
 ## Module Documentation
 

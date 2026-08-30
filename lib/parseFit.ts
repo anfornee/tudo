@@ -79,16 +79,16 @@ export async function parseZwiftFit(
 
   const averagePower = powerSamples.length
     ? powerSamples.reduce((sum, value) => sum + value, 0) / powerSamples.length
-    : 0;
+    : null;
 
   const averageCadence = cadenceSamples.length
     ? cadenceSamples.reduce((sum, value) => sum + value, 0) /
       cadenceSamples.length
-    : 0;
+    : null;
 
-  const maxPower = powerSamples.length ? Math.max(...powerSamples) : 0;
+  const maxPower = powerSamples.length ? Math.max(...powerSamples) : null;
 
-  const maxCadence = cadenceSamples.length ? Math.max(...cadenceSamples) : 0;
+  const maxCadence = cadenceSamples.length ? Math.max(...cadenceSamples) : null;
 
   const durationSeconds =
     session?.totalElapsedTime ??
@@ -124,7 +124,7 @@ export async function parseZwiftFit(
 
     elevationGainFeet: (session?.totalAscent ?? 0) * 3.28084,
 
-    calories: session?.totalCalories ?? 0,
+    calories: session?.totalCalories ?? null,
 
     zeroPowerSeconds: powerSamples.filter((power) => power === 0).length, // Zwift records power at 1 Hz, so each sample represents one second.
 

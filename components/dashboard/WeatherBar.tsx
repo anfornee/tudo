@@ -43,6 +43,7 @@ interface WeatherBarProps {
   };
   locationLabel?: string;
   linkToWeatherPage?: boolean;
+  dragHandle?: React.ReactNode;
 }
 
 function WeatherIcon({
@@ -198,6 +199,7 @@ export function WeatherBar({
   coordinates,
   locationLabel,
   linkToWeatherPage = false,
+  dragHandle,
 }: WeatherBarProps = {}) {
   const router = useRouter();
   const currentLocation = useCurrentWeatherLocation(!coordinates);
@@ -369,6 +371,8 @@ export function WeatherBar({
               <SelectItem value="daily">5 Days</SelectItem>
             </SelectContent>
           </Select>
+
+          {dragHandle}
         </div>
       </div>
 

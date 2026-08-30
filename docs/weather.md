@@ -79,8 +79,10 @@ from rendering.
 
 Users can add and remove saved locations without a confirmation workflow. A
 right-to-left swipe or long press on a saved Weather bar reveals its full-height
-delete action; swiping right or tapping the bar closes it. Saved locations are
-ordered by creation time, oldest first.
+delete action; swiping right or tapping the bar closes it. A grip at the far end
+of each saved location's title bar supports pointer, touch, and keyboard
+reordering. The order updates immediately and is persisted after the completed
+drag. Locations saved before ordering was introduced fall back to creation order.
 
 ## Location Search
 
@@ -113,6 +115,7 @@ Each document contains:
 * `latitude`
 * `longitude`
 * `createdAt` (Firestore server timestamp)
+* `sortOrder` (number used for the user's saved-location order)
 
 The Weather domain's persistence functions live in `lib/weather-locations.ts`.
 Firestore rules require the authenticated UID to match the path UID. Current

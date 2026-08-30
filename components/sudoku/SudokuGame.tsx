@@ -381,7 +381,7 @@ export function SudokuGame() {
       className="outline-none"
     >
       {completed && (
-        <section className="mt-4 mb-4 rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
+        <section className="mx-auto mb-4 w-full max-w-[700px] rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -416,109 +416,104 @@ export function SudokuGame() {
         </section>
       )}
 
-      <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
-        <div className="flex flex-wrap items-center justify-between border-b px-5 py-3">
-          <div className="flex items-center gap-3">
-            <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium">
-              {difficultyLabel(game.difficulty)}
-            </span>
+      <div className="mx-auto w-full max-w-[700px] space-y-4">
+        <section className="rounded-xl border bg-card px-5 py-3 text-card-foreground shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium">
+                {difficultyLabel(game.difficulty)}
+              </span>
 
-            <span className="text-sm text-muted-foreground">
-              {remainingCells} remaining
-            </span>
+              <span className="text-sm text-muted-foreground">
+                {remainingCells} remaining
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 font-mono text-sm font-medium tabular-nums">
+              <Clock3 className="size-4 text-muted-foreground" />
+              {formatTime(elapsedSeconds)}
+            </div>
+          </div>
+        </section>
+
+        <SudokuBoard
+          values={values}
+          puzzle={game.puzzle}
+          solution={game.solution}
+          notes={notes}
+          selectedIndex={selectedIndex}
+          completed={completed}
+          onSelect={(index) => {
+            setSelectedIndex(index);
+
+            gameAreaRef.current?.focus();
+          }}
+        />
+
+        <section className="space-y-4 rounded-xl border bg-card p-4 text-card-foreground shadow-sm sm:p-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
+            {Array.from({ length: 9 }, (_, index) => index + 1).map(
+              (number) => {
+                const isComplete = numberCounts[number] >= 9;
+
+                return (
+                  <Button
+                    key={number}
+                    type="button"
+                    variant="outline"
+                    className="h-12 text-lg font-semibold"
+                    disabled={completed || isComplete}
+                    onClick={() => enterNumber(number)}
+                  >
+                    {number}
+                  </Button>
+                );
+              },
+            )}
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-sm font-medium tabular-nums">
-            <Clock3 className="size-4 text-muted-foreground" />
-            {formatTime(elapsedSeconds)}
-          </div>
-        </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Button
+              type="button"
+              variant={notesMode ? "default" : "outline"}
+              disabled={completed}
+              onClick={() => setNotesMode((current) => !current)}
+            >
+              <Pencil className="size-4" />
+              Notes
+            </Button>
 
-        <div className="grid gap-6 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
-          <div className="mx-auto w-full max-w-[600px]">
-            <SudokuBoard
-              values={values}
-              puzzle={game.puzzle}
-              solution={game.solution}
-              notes={notes}
-              selectedIndex={selectedIndex}
-              completed={completed}
-              onSelect={(index) => {
-                setSelectedIndex(index);
+            <Button
+              type="button"
+              variant="outline"
+              disabled={completed}
+              onClick={eraseSelected}
+            >
+              <Eraser className="size-4" />
+              Erase
+            </Button>
+            <Button type="button" variant="outline" onClick={restartGame}>
+              <RotateCcw className="size-4" />
+              Restart puzzle
+            </Button>
 
-                gameAreaRef.current?.focus();
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setGame(null);
+                setValues([]);
+                setNotes(EMPTY_NOTES());
+                setSelectedIndex(null);
+                setCompleted(false);
+                setElapsedSeconds(0);
               }}
-            />
+            >
+              New game
+            </Button>
           </div>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
-              {Array.from({ length: 9 }, (_, index) => index + 1).map(
-                (number) => {
-                  const isComplete = numberCounts[number] >= 9;
-
-                  return (
-                    <Button
-                      key={number}
-                      type="button"
-                      variant="outline"
-                      className="h-12 text-lg font-semibold"
-                      disabled={completed || isComplete}
-                      onClick={() => enterNumber(number)}
-                    >
-                      {number}
-                    </Button>
-                  );
-                },
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={notesMode ? "default" : "outline"}
-                disabled={completed}
-                onClick={() => setNotesMode((current) => !current)}
-              >
-                <Pencil className="size-4" />
-                Notes
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                disabled={completed}
-                onClick={eraseSelected}
-              >
-                <Eraser className="size-4" />
-                Erase
-              </Button>
-            </div>
-
-            <div className="grid gap-2">
-              <Button type="button" variant="outline" onClick={restartGame}>
-                <RotateCcw className="size-4" />
-                Restart puzzle
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setGame(null);
-                  setValues([]);
-                  setNotes(EMPTY_NOTES());
-                  setSelectedIndex(null);
-                  setCompleted(false);
-                  setElapsedSeconds(0);
-                }}
-              >
-                New game
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

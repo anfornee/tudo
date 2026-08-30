@@ -1,5 +1,4 @@
-import { SudokuBlock } from "@/components/dashboard/SudokuBlock";
-import { WeatherBar } from "@/components/dashboard/WeatherBar";
+import { DashboardFeatureGrid } from "@/components/dashboard/DashboardFeatureGrid";
 
 export default function DashboardPage() {
   return (
@@ -10,13 +9,7 @@ export default function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">Today at a glance.</p>
       </div>
 
-      <WeatherBar linkToWeatherPage />
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <SudokuBlock />
-
-        {/* Future dashboard cards */}
-      </div>
+      <DashboardFeatureGrid />
     </main>
   );
 }

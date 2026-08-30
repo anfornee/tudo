@@ -44,7 +44,7 @@ export function SudokuBoard({
 
   return (
     <div
-      className="grid w-full grid-cols-[repeat(9,minmax(0,1fr))] overflow-hidden rounded-lg border-2 border-foreground/70 bg-border"
+      className="relative grid w-full grid-cols-[repeat(9,minmax(0,1fr))] overflow-hidden rounded-lg border-2 border-foreground/70 bg-border"
       role="grid"
       aria-label="Sudoku board"
     >
@@ -63,10 +63,6 @@ export function SudokuBoard({
         const isIncorrect =
           !isGiven && value !== 0 && value !== solution[index];
 
-        const hasRightBoxBorder = column === 2 || column === 5;
-
-        const hasBottomBoxBorder = row === 2 || row === 5;
-
         return (
           <button
             key={index}
@@ -82,8 +78,6 @@ export function SudokuBoard({
               "focus:z-10 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset",
               column !== 8 && "border-r border-border",
               row !== 8 && "border-b border-border",
-              hasRightBoxBorder && "border-r-2 border-r-foreground/70",
-              hasBottomBoxBorder && "border-b-2 border-b-foreground/70",
               isRelated && !isSelected && "bg-muted/60",
               isMatching && !isSelected && "bg-accent",
               isSelected && "bg-primary/15",
@@ -129,6 +123,16 @@ export function SudokuBoard({
           </button>
         );
       })}
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-20"
+      >
+        <span className="absolute inset-y-0 left-1/3 w-0.5 -translate-x-1/2 bg-foreground/70" />
+        <span className="absolute inset-y-0 left-2/3 w-0.5 -translate-x-1/2 bg-foreground/70" />
+        <span className="absolute inset-x-0 top-1/3 h-0.5 -translate-y-1/2 bg-foreground/70" />
+        <span className="absolute inset-x-0 top-2/3 h-0.5 -translate-y-1/2 bg-foreground/70" />
+      </div>
     </div>
   );
 }

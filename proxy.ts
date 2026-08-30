@@ -4,7 +4,7 @@ export function proxy(request: NextRequest) {
 	const session = request.cookies.get("session")?.value;
 	const { pathname } = request.nextUrl;
 
-	const isProtectedRoute = ["/dashboard", "/weather", "/sudoku"].some(
+	const isProtectedRoute = ["/dashboard", "/weather", "/sudoku", "/rides"].some(
 		(route) => pathname === route || pathname.startsWith(`${route}/`),
 	);
 
@@ -24,5 +24,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-	matcher: ["/login", "/dashboard/:path*", "/weather/:path*", "/sudoku/:path*"],
+	matcher: ["/login", "/dashboard/:path*", "/weather/:path*", "/sudoku/:path*", "/rides/:path*"],
 };

@@ -14,6 +14,7 @@ interface SwipeToDeleteWeatherBarProps {
   location: SavedWeatherLocation;
   removing: boolean;
   onRemove: () => void;
+  dragHandle?: React.ReactNode;
 }
 
 function displayName(location: SavedWeatherLocation) {
@@ -24,6 +25,7 @@ export function SwipeToDeleteWeatherBar({
   location,
   removing,
   onRemove,
+  dragHandle,
 }: SwipeToDeleteWeatherBarProps) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -137,7 +139,7 @@ export function SwipeToDeleteWeatherBar({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-destructive">
+    <div className="relative w-full min-w-0 overflow-hidden rounded-xl bg-destructive">
       <button
         type="button"
         aria-label={`Remove ${displayName(location)}`}
@@ -173,7 +175,11 @@ export function SwipeToDeleteWeatherBar({
             setOffset(0);
           }
         }}
-        className={dragging ? "" : "transition-transform duration-200 ease-out"}
+        className={
+          dragging
+            ? "w-full min-w-0"
+            : "w-full min-w-0 transition-transform duration-200 ease-out"
+        }
         style={{ transform: `translateX(${offset}px)` }}
       >
         <WeatherBar
@@ -182,6 +188,7 @@ export function SwipeToDeleteWeatherBar({
             longitude: location.longitude,
           }}
           locationLabel={displayName(location)}
+          dragHandle={dragHandle}
         />
       </div>
     </div>

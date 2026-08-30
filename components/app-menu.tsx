@@ -4,11 +4,12 @@ import { X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
-import { appFeatures } from "@/lib/features";
+import type { appFeatures } from "@/lib/features";
 import { cn } from "@/lib/utils";
 
 interface AppMenuProps {
   pathname: string;
+  features: Array<(typeof appFeatures)[number]>;
   isClosing: boolean;
   onClose: () => void;
 }
@@ -17,7 +18,7 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppMenu({ pathname, isClosing, onClose }: AppMenuProps) {
+export function AppMenu({ pathname, features, isClosing, onClose }: AppMenuProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -84,12 +85,10 @@ export function AppMenu({ pathname, isClosing, onClose }: AppMenuProps) {
 
         <nav
           aria-label="Application pages"
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-5"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-5"
         >
           <ul className="grid gap-2">
-            {appFeatures
-              .filter((feature) => feature.showInNav)
-              .map((feature) => {
+            {features.map((feature) => {
                 const active = isActiveRoute(pathname, feature.href);
                 const Icon = feature.icon;
 

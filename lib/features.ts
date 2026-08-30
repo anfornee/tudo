@@ -1,7 +1,7 @@
-import { CloudSun, Grid3X3, type LucideIcon } from "lucide-react";
+import { Bike, CloudSun, Grid3X3, type LucideIcon } from "lucide-react";
 
 export interface AppFeature {
-  id: "weather" | "sudoku";
+  id: "weather" | "sudoku" | "rides";
   label: string;
   href: string;
   icon: LucideIcon;
@@ -23,6 +23,14 @@ export const appFeatures = [
     label: "Sudoku",
     href: "/sudoku",
     icon: Grid3X3,
+    showInNav: true,
+    showOnDashboard: true,
+  },
+  {
+    id: "rides",
+    label: "Rides",
+    href: "/rides",
+    icon: Bike,
     showInNav: true,
     showOnDashboard: true,
   },

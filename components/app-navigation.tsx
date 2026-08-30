@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppMenu } from "@/components/app-menu";
+import { useFeatureOrder } from "@/components/feature-order-provider";
 import { auth } from "@/lib/firebase-client";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ function isActiveRoute(pathname: string, href: string) {
 
 export function AppNavigation() {
   const pathname = usePathname();
+  const { navigationFeatures } = useFeatureOrder();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuClosing, setIsMenuClosing] = useState(false);
@@ -138,7 +140,7 @@ export function AppNavigation() {
 
       <nav
         aria-label="Primary navigation"
-        className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md supports-[backdrop-filter]:bg-background/85 sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur-md supports-[backdrop-filter]:bg-background/85 sm:hidden"
       >
         <ul className="mx-auto flex max-w-md px-3">
           <li className="flex-1">
@@ -193,6 +195,7 @@ export function AppNavigation() {
       {isMenuOpen && (
         <AppMenu
           pathname={pathname}
+          features={navigationFeatures}
           isClosing={isMenuClosing}
           onClose={closeMenu}
         />
