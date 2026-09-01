@@ -1,65 +1,225 @@
-"use client";
+import {
+	CalendarDays,
+	Clock3,
+	Gauge,
+	Mountain,
+	Zap,
+} from "lucide-react";
 
-import { onAuthStateChanged } from "firebase/auth";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+	formatElevationGain,
+	formatRideDistance,
+	formatRideDuration,
+} from "@/lib/rides/formatters";
+import type {
+	RideSource,
+	RideSummaryMetrics,
+} from "@/lib/rides/types";
 
-import { RideCharts } from "@/components/rides/RideCharts";
-import { RideSummary } from "@/components/rides/RideSummary";
-import { auth } from "@/lib/firebase-client";
-import type { RideSample } from "@/lib/ride.types";
-import { getRide, getRideSamples } from "@/lib/rides/persistence";
-import type { SavedRide } from "@/lib/rides/types";
+interface RideSummaryProps {
+	ride: RideSummaryMetrics;
+	source: RideSource;
+	activityDate: Date | null;
+	fileName?: string;
+}
 
-export function SavedRideContent({ userId, rideId }: { userId: string; rideId: string }) {
-  const [ride, setRide] = useState<SavedRide | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [samples, setSamples] = useState<RideSample[] | null>(null);
-  const [samplesLoading, setSamplesLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function formatDate(
+	date: Date | null,
+) {
+	if (!date) {
+		return "Date unavailable";
+	}
 
-  useEffect(() => onAuthStateChanged(auth, (user) => {
-    if (!user || user.uid !== userId) {
-      window.location.assign("/api/auth/logout");
-      return;
-    }
-    void getRide(userId, rideId)
-      .then((savedRide) => {
-        if (!savedRide) setError("This saved ride could not be found.");
-        setRide(savedRide);
-        if (savedRide?.sampleFilePath) {
-          setSamplesLoading(true);
-          void getRideSamples(savedRide)
-            .then(setSamples)
-            .catch((error) => console.error("Unable to load ride samples:", error))
-            .finally(() => setSamplesLoading(false));
-        }
-      })
-      .catch((error) => {
-        console.error("Unable to load ride:", error);
-        setError("Unable to load this saved ride.");
-      })
-      .finally(() => setLoading(false));
-  }), [rideId, userId]);
+	return new Intl.DateTimeFormat(
+		"en-US",
+		{
+			dateStyle: "medium",
+			timeStyle: "short",
+		},
+	).format(date);
+}
 
-  if (loading) return <div className="flex min-h-48 items-center justify-center rounded-xl border bg-card"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>;
-  if (!ride) return <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">{error}</div>;
+export function RideSummary({
+	ride,
+	source,
+	activityDate,
+	fileName,
+}: RideSummaryProps) {
+	const metrics = [
+		{
+			label: "Distance",
+			value: formatRideDistance(
+				ride.distanceMiles,
+			),
+		},
+		{
+			label: "Duration",
+			value: formatRideDuration(
+				ride.durationSeconds,
+			),
+		},
+		...(Math.round(
+			ride.movingTimeSeconds,
+		) !==
+		Math.round(
+			ride.durationSeconds,
+		)
+			? [
+					{
+						label: "Moving time",
+						value: formatRideDuration(
+							ride.movingTimeSeconds,
+						),
+					},
+				]
+			: []),
+		{
+			label: "Average speed",
+			value: `${ride.averageSpeedMph.toFixed(1)} mph`,
+		},
+		{
+			label: "Elevation",
+			value: formatElevationGain(
+				ride.elevationGainFeet,
+			),
+		},
+		...(ride.calories !== null
+			? [
+					{
+						label: "Calories",
+						value: `${Math.round(
+							ride.calories,
+						)} kcal`,
+					},
+				]
+			: []),
+		...(ride.averagePower !== null
+			? [
+					{
+						label: "Average power",
+						value: `${Math.round(
+							ride.averagePower,
+						)} W`,
+					},
+				]
+			: []),
+		...(ride.maxPower !== null
+			? [
+					{
+						label: "Maximum power",
+						value: `${Math.round(
+							ride.maxPower,
+						)} W`,
+					},
+				]
+			: []),
+		...(ride.normalizedPower !== null
+			? [
+					{
+						label: "Normalized power",
+						value: `${Math.round(
+							ride.normalizedPower,
+						)} W`,
+					},
+				]
+			: []),
+		...(ride.averageCadence !== null
+			? [
+					{
+						label: "Average cadence",
+						value: `${Math.round(
+							ride.averageCadence,
+						)} rpm`,
+					},
+				]
+			: []),
+		...(ride.maxCadence !== null
+			? [
+					{
+						label: "Maximum cadence",
+						value: `${Math.round(
+							ride.maxCadence,
+						)} rpm`,
+					},
+				]
+			: []),
+		...(ride.averageHeartRate !== null
+			? [
+					{
+						label: "Average heart rate",
+						value: `${Math.round(
+							ride.averageHeartRate,
+						)} bpm`,
+					},
+				]
+			: []),
+		...(ride.maxHeartRate !== null
+			? [
+					{
+						label: "Maximum heart rate",
+						value: `${Math.round(
+							ride.maxHeartRate,
+						)} bpm`,
+					},
+				]
+			: []),
+	];
 
-  return (
-    <div className="space-y-6">
-      <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
-        <Link href="/rides" className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Back to rides</Link>
-        <RideSummary
-          ride={ride}
-          source={ride.source}
-          activityDate={(ride.activityDate ?? ride.importedAt)?.toDate() ?? null}
-          fileName={ride.originalFileName}
-        />
-      </section>
-      {samplesLoading ? (
-        <div className="flex min-h-40 items-center justify-center rounded-xl border bg-card"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
-      ) : <RideCharts samples={samples} />}
-    </div>
-  );
+	return (
+		<div className="space-y-4">
+			<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+				<span className="flex items-center gap-1.5">
+					<CalendarDays className="size-4" />
+					{formatDate(
+						activityDate,
+					)}
+				</span>
+
+				<span className="rounded-md bg-muted px-2 py-1 text-xs font-medium uppercase">
+					{source}
+				</span>
+
+				{fileName && (
+					<span className="min-w-0 truncate">
+						{fileName}
+					</span>
+				)}
+			</div>
+
+			<dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+				{metrics.map(
+					(metric, index) => {
+						const Icon = [
+							Gauge,
+							Clock3,
+							Mountain,
+							Zap,
+						][index % 4];
+
+						return (
+							<div
+								key={
+									metric.label
+								}
+								className="rounded-xl border bg-background p-3"
+							>
+								<dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+									<Icon className="size-3.5" />
+									{
+										metric.label
+									}
+								</dt>
+
+								<dd className="mt-1 font-semibold tabular-nums">
+									{
+										metric.value
+									}
+								</dd>
+							</div>
+						);
+					},
+				)}
+			</dl>
+		</div>
+	);
 }
