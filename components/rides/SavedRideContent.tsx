@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog";
 import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
+import type { ReanalysisStatus } from "@/components/rides/ReanalyzeRideDialog";
 import { RideCharts } from "@/components/rides/RideCharts";
 import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,20 @@ export function SavedRideContent({
 
 	const [showDeleteDialog, setShowDeleteDialog] =
 		useState(false);
+
+	const [
+		reanalysisStatus,
+		setReanalysisStatus,
+	] = useState<ReanalysisStatus>(
+		"idle",
+	);
+
+	const [
+		reanalysisError,
+		setReanalysisError,
+	] = useState<string | null>(
+		null,
+	);
 
 	const [error, setError] =
 		useState<string | null>(null);
@@ -130,28 +145,37 @@ export function SavedRideContent({
 	}, [rideId, userId]);
 
 	async function handleReanalyze() {
-		if (!ride || reanalyzing || deleting) {
+		if (
+			!ride ||
+			reanalyzing ||
+			deleting
+		) {
 			return;
 		}
 
 		setReanalyzing(true);
+		setReanalysisStatus(
+			"idle",
+		);
+		setReanalysisError(null);
 		setError(null);
 		setMessage(null);
 
 		try {
-			const result = await reanalyzeRide(
-				userId,
-				ride.id,
-			);
+			const result =
+				await reanalyzeRide(
+					userId,
+					ride.id,
+				);
 
 			setRide(result.ride);
 
-			await loadSamples(result.ride);
+			await loadSamples(
+				result.ride,
+			);
 
-			setShowReanalyzeDialog(false);
-
-			setMessage(
-				"Ride re-analyzed using the original activity file.",
+			setReanalysisStatus(
+				"success",
 			);
 		} catch (error) {
 			console.error(
@@ -159,10 +183,17 @@ export function SavedRideContent({
 				error,
 			);
 
-			setError(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Unable to re-analyze this ride. Please try again.",
+					: "Unable to re-analyze this ride. Please try again.";
+
+			setReanalysisError(
+				message,
+			);
+
+			setReanalysisStatus(
+				"error",
 			);
 		} finally {
 			setReanalyzing(false);
@@ -238,9 +269,11 @@ export function SavedRideContent({
 								deleting ||
 								!ride.originalFilePath
 							}
-							onClick={() =>
-								setShowReanalyzeDialog(true)
-							}
+							onClick={() => {
+								setReanalysisStatus("idle");
+								setReanalysisError(null);
+								setShowReanalyzeDialog(true);
+							}}
 							title={
 								ride.originalFilePath
 									? "Re-analyze the original activity file"
@@ -324,9 +357,23 @@ export function SavedRideContent({
 				ride={ride}
 				open={showReanalyzeDialog}
 				processing={reanalyzing}
+				status={reanalysisStatus}
+				errorMessage={reanalysisError}
 				onOpenChange={(open) => {
 					if (!reanalyzing) {
-						setShowReanalyzeDialog(open);
+						setShowReanalyzeDialog(
+							open,
+						);
+
+						if (!open) {
+							setReanalysisStatus(
+								"idle",
+							);
+
+							setReanalysisError(
+								null,
+							);
+						}
 					}
 				}}
 				onConfirm={() => {

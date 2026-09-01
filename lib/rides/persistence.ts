@@ -11,12 +11,15 @@ import {
 } from "firebase/firestore";
 import {
 	deleteObject,
-	getBytes,
 	ref,
 	uploadBytes,
 } from "firebase/storage";
 
-import { db, storage } from "@/lib/firebase-client";
+import {
+	auth,
+	db,
+	storage,
+} from "@/lib/firebase-client";
 import type {
 	RideData,
 	RideSample,
@@ -120,26 +123,85 @@ export async function getRideSamples(
 		return null;
 	}
 
-	const bytes = await getBytes(
-		ref(storage, ride.sampleFilePath),
-	);
+	const user =
+		auth.currentUser;
 
-	const parsed: unknown = JSON.parse(
-		new TextDecoder().decode(bytes),
-	);
-
-	if (!parsed || typeof parsed !== "object") {
-		throw new Error("Invalid ride sample data.");
+	if (!user) {
+		throw new Error(
+			"You must be signed in to load ride samples.",
+		);
 	}
 
-	const stored = parsed as Partial<StoredRideSamples>;
+	const idToken =
+		await user.getIdToken();
+
+	const response = await fetch(
+		`/api/rides/${ride.id}/samples`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type":
+					"application/json",
+				Authorization:
+					`Bearer ${idToken}`,
+			},
+			body: JSON.stringify({
+				sampleFilePath:
+					ride.sampleFilePath,
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		let message =
+			"Unable to load ride sample data.";
+
+		try {
+			const result =
+				(await response.json()) as {
+					error?: string;
+				};
+
+			if (result.error) {
+				message =
+					result.error;
+			}
+		} catch {
+			// Non-JSON response.
+		}
+
+		throw new Error(
+			message,
+		);
+	}
+
+	const parsed: unknown =
+		await response.json();
+
+	if (
+		!parsed ||
+		typeof parsed !== "object"
+	) {
+		throw new Error(
+			"Invalid ride sample data.",
+		);
+	}
+
+	const stored =
+		parsed as Partial<StoredRideSamples>;
 
 	if (
 		stored.version !== 1 ||
-		!Array.isArray(stored.samples) ||
-		!stored.samples.every(isRideSample)
+		!Array.isArray(
+			stored.samples,
+		) ||
+		!stored.samples.every(
+			isRideSample,
+		)
 	) {
-		throw new Error("Unsupported ride sample data.");
+		throw new Error(
+			"Unsupported ride sample data.",
+		);
 	}
 
 	return stored.samples;
