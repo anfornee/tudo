@@ -19,6 +19,7 @@ import {
 
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog";
 import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
+import type { ReanalysisStatus } from "@/components/rides/ReanalyzeRideDialog";
 import { RideHistoryAnalytics } from "@/components/rides/RideHistoryAnalytics";
 import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,12 @@ export function RidesPageContent({
 
 	const [rideToReanalyze, setRideToReanalyze] =
 		useState<SavedRide | null>(null);
+
+	const [reanalysisStatus, setReanalysisStatus] =
+		useState<ReanalysisStatus>("idle");
+
+	const [reanalysisError, setReanalysisError] =
+		useState<string | null>(null);
 
 	const [
 		reanalyzingRideId,
@@ -227,52 +234,40 @@ export function RidesPageContent({
 
 		const ride = rideToReanalyze;
 
-		setReanalyzingRideId(
-			ride.id,
-		);
-
+		setReanalyzingRideId(ride.id);
+		setReanalysisStatus("idle");
+		setReanalysisError(null);
 		setError(null);
 		setSaveMessage(null);
 
 		try {
-			const result =
-				await reanalyzeRide(
-					userId,
-					ride.id,
-				);
+			const result = await reanalyzeRide(
+				userId,
+				ride.id,
+			);
 
-			/*
-			 * Replace this ride with the newly analyzed
-			 * summary. RideHistoryAnalytics receives the
-			 * updated rides array, so distance totals,
-			 * calendar data, and streak data update too.
-			 */
 			setRides((currentRides) =>
-				currentRides.map(
-					(currentRide) =>
-						currentRide.id ===
-						result.ride.id
-							? result.ride
-							: currentRide,
+				currentRides.map((currentRide) =>
+					currentRide.id === result.ride.id
+						? result.ride
+						: currentRide,
 				),
 			);
 
-			setRideToReanalyze(null);
-
-			setSaveMessage(
-				"Ride re-analyzed using the original activity file.",
-			);
+			setReanalysisStatus("success");
 		} catch (error) {
 			console.error(
 				"Unable to re-analyze ride:",
 				error,
 			);
 
-			setError(
+			const message =
 				error instanceof Error
 					? error.message
-					: "Unable to re-analyze this ride. Please try again.",
-			);
+					: "Unable to re-analyze this ride. Please try again.";
+
+			setReanalysisError(message);
+			setReanalysisStatus("error");
 		} finally {
 			setReanalyzingRideId(null);
 		}
@@ -475,7 +470,7 @@ export function RidesPageContent({
 									disabled={
 										saving ||
 										savedRideId !==
-											null
+										null
 									}
 									onClick={
 										handleSave
@@ -599,21 +594,21 @@ export function RidesPageContent({
 												<span>
 													{Math.round(
 														ride.durationSeconds /
-															60,
+														60,
 													)}{" "}
 													min
 												</span>
 
 												{ride.averagePower !==
 													null && (
-													<span>
-														{Math.round(
-															ride.averagePower,
-														)}{" "}
-														W
-														avg
-													</span>
-												)}
+														<span>
+															{Math.round(
+																ride.averagePower,
+															)}{" "}
+															W
+															avg
+														</span>
+													)}
 
 												<span>
 													{formatElevationGain(
@@ -632,18 +627,17 @@ export function RidesPageContent({
 													rideActionInProgress ||
 													!ride.originalFilePath
 												}
-												onClick={() =>
-													setRideToReanalyze(
-														ride,
-													)
-												}
+												onClick={() => {
+													setReanalysisStatus("idle");
+													setReanalysisError(null);
+													setRideToReanalyze(ride);
+												}}
 												className="text-muted-foreground hover:text-foreground"
-												aria-label={`Re-analyze ride from ${
-													rideDate(
-														ride,
-													)?.toLocaleDateString() ??
+												aria-label={`Re-analyze ride from ${rideDate(
+													ride,
+												)?.toLocaleDateString() ??
 													"unknown date"
-												}`}
+													}`}
 												title={
 													ride.originalFilePath
 														? "Re-analyze original activity file"
@@ -651,7 +645,7 @@ export function RidesPageContent({
 												}
 											>
 												{reanalyzingRideId ===
-												ride.id ? (
+													ride.id ? (
 													<Loader2 className="size-4 animate-spin" />
 												) : (
 													<RefreshCw className="size-4" />
@@ -671,16 +665,15 @@ export function RidesPageContent({
 													)
 												}
 												className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-												aria-label={`Delete ride from ${
-													rideDate(
-														ride,
-													)?.toLocaleDateString() ??
+												aria-label={`Delete ride from ${rideDate(
+													ride,
+												)?.toLocaleDateString() ??
 													"unknown date"
-												}`}
+													}`}
 												title="Delete ride"
 											>
 												{deletingRideId ===
-												ride.id ? (
+													ride.id ? (
 													<Loader2 className="size-4 animate-spin" />
 												) : (
 													<Trash2 className="size-4" />
@@ -697,20 +690,19 @@ export function RidesPageContent({
 
 			<ReanalyzeRideDialog
 				ride={rideToReanalyze}
-				open={
-					rideToReanalyze !== null
-				}
-				processing={
-					reanalyzingRideId !== null
-				}
+				open={rideToReanalyze !== null}
+				processing={reanalyzingRideId !== null}
+				status={reanalysisStatus}
+				errorMessage={reanalysisError}
 				onOpenChange={(open) => {
-					if (
-						!open &&
-						reanalyzingRideId === null
-					) {
-						setRideToReanalyze(
-							null,
-						);
+					if (reanalyzingRideId !== null) {
+						return;
+					}
+
+					if (!open) {
+						setRideToReanalyze(null);
+						setReanalysisStatus("idle");
+						setReanalysisError(null);
 					}
 				}}
 				onConfirm={() => {
