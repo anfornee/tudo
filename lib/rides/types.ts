@@ -1,6 +1,6 @@
 import type { Timestamp } from "firebase/firestore";
 
-import type { RideData } from "@/lib/ride.types";
+import type { RideData, RideSample } from "@/lib/ride.types";
 
 export type RideSource = RideData["source"];
 
@@ -28,6 +28,12 @@ export interface SavedRide extends RideSummaryMetrics {
   originalFileName: string;
   source: RideSource;
   originalFilePath: string;
+  sampleFilePath?: string | null;
+}
+
+export interface StoredRideSamples {
+  version: 1;
+  samples: RideSample[];
 }
 
 export interface ProcessedRide {

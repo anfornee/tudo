@@ -4,13 +4,15 @@ import {
   calculateNormalizedPower,
   calculatePowerPercentiles,
 } from "./rideCalculations";
-import { RideData } from "./ride.types";
+import type { RideData, RideSample } from "./ride.types";
 
-interface RideSample {
+interface FitRecordSample {
   timestamp: Date;
   power: number | null;
   cadence: number | null;
   speed: number | null;
+  elevation: number | null;
+  distance: number | null;
 }
 
 export async function parseZwiftFit(
@@ -41,28 +43,41 @@ export async function parseZwiftFit(
 
   const session = sessions[0];
 
-  const samples: RideSample[] = records
+  const recordsWithTimestamps: FitRecordSample[] = records
     .map((record) => ({
       timestamp: record.timestamp,
       power: Number.isFinite(record.power) ? record.power : null,
       cadence: Number.isFinite(record.cadence) ? record.cadence : null,
       speed: Number.isFinite(record.speed) ? record.speed : null,
+      elevation: Number.isFinite(record.enhancedAltitude)
+        ? record.enhancedAltitude
+        : Number.isFinite(record.altitude) ? record.altitude : null,
+      distance: Number.isFinite(record.distance) ? record.distance : null,
     }))
-    .filter((sample): sample is RideSample => sample.timestamp instanceof Date);
+    .filter((sample): sample is FitRecordSample => sample.timestamp instanceof Date);
 
-  const powerSamples = samples
+  const powerSamples = recordsWithTimestamps
     .map((sample) => sample.power)
     .filter((value): value is number => value !== null);
 
-  const cadenceSamples = samples
+  const cadenceSamples = recordsWithTimestamps
     .map((sample) => sample.cadence)
     .filter((value): value is number => value !== null);
 
-  const speedSamples = samples
+  const speedSamples = recordsWithTimestamps
     .map((sample) => sample.speed)
     .filter((value): value is number => value !== null);
 
-  const timestamps = samples.map((sample) => sample.timestamp);
+  const timestamps = recordsWithTimestamps.map((sample) => sample.timestamp);
+  const firstTimestamp = timestamps[0]?.getTime() ?? 0;
+  const samples: RideSample[] = recordsWithTimestamps.map((sample) => ({
+    elapsedSeconds: Math.max(0, (sample.timestamp.getTime() - firstTimestamp) / 1000),
+    power: sample.power,
+    speedMph: sample.speed === null ? null : sample.speed * 2.236936,
+    cadence: sample.cadence,
+    elevationFeet: sample.elevation === null ? null : sample.elevation * 3.28084,
+    distanceMiles: sample.distance === null ? null : sample.distance / 1609.344,
+  }));
 
   const heartRateSamples = records
     .map((record) => record.heartRate)
@@ -144,5 +159,6 @@ export async function parseZwiftFit(
     averageHeartRate,
     maxHeartRate,
     heartRateSamples,
+    samples,
   };
 }

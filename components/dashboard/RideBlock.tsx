@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
+import { formatElevationGain, formatRideDistance } from "@/lib/rides/formatters";
 import { getRides } from "@/lib/rides/persistence";
 import type { SavedRide } from "@/lib/rides/types";
 
@@ -87,7 +88,7 @@ export function RideBlock({ dragHandle }: { dragHandle?: React.ReactNode }) {
               <div className="rounded-lg bg-muted/60 p-2.5">
                 <Gauge className="size-4 text-muted-foreground" />
                 <p className="mt-1 font-semibold tabular-nums">
-                  {ride.distanceMiles.toFixed(1)} mi
+                  {formatRideDistance(ride.distanceMiles)}
                 </p>
               </div>
               <div className="rounded-lg bg-muted/60 p-2.5">
@@ -99,7 +100,7 @@ export function RideBlock({ dragHandle }: { dragHandle?: React.ReactNode }) {
               <div className="rounded-lg bg-muted/60 p-2.5">
                 <Mountain className="size-4 text-muted-foreground" />
                 <p className="mt-1 font-semibold tabular-nums">
-                  {Math.round(ride.elevationGainFeet)} ft
+                  {formatElevationGain(ride.elevationGainFeet)}
                 </p>
               </div>
             </div>

@@ -7,11 +7,12 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { deleteObject, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getBytes, ref, uploadBytes } from "firebase/storage";
 
 import { db, storage } from "@/lib/firebase-client";
 import type { RideData } from "@/lib/ride.types";
-import type { SavedRide } from "@/lib/rides/types";
+import type { RideSample } from "@/lib/ride.types";
+import type { SavedRide, StoredRideSamples } from "@/lib/rides/types";
 
 function ridesCollection(userId: string) {
   return collection(db, "users", userId, "rides");
@@ -55,6 +56,27 @@ export async function getRide(
   );
 }
 
+function isRideSample(value: unknown): value is RideSample {
+  if (!value || typeof value !== "object") return false;
+  const sample = value as Record<string, unknown>;
+  return typeof sample.elapsedSeconds === "number" && Number.isFinite(sample.elapsedSeconds) &&
+    ["power", "speedMph", "cadence", "elevationFeet", "distanceMiles"].every(
+      (key) => sample[key] === null || (typeof sample[key] === "number" && Number.isFinite(sample[key])),
+    );
+}
+
+export async function getRideSamples(ride: SavedRide): Promise<RideSample[] | null> {
+  if (!ride.sampleFilePath) return null;
+  const bytes = await getBytes(ref(storage, ride.sampleFilePath));
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!parsed || typeof parsed !== "object") throw new Error("Invalid ride sample data.");
+  const stored = parsed as Partial<StoredRideSamples>;
+  if (stored.version !== 1 || !Array.isArray(stored.samples) || !stored.samples.every(isRideSample)) {
+    throw new Error("Unsupported ride sample data.");
+  }
+  return stored.samples;
+}
+
 function summaryFromRide(ride: RideData) {
   return {
     distanceMiles: ride.distanceMiles,
@@ -83,14 +105,25 @@ export async function saveRide(
   const extension = ride.source;
   const originalFilePath = `users/${userId}/rides/${rideDocument.id}/original.${extension}`;
   const originalFile = ref(storage, originalFilePath);
-
-  await uploadBytes(originalFile, file, {
-    contentType:
-      extension === "gpx" ? "application/gpx+xml" : "application/octet-stream",
-    customMetadata: { originalFileName: file.name },
-  });
+  const sampleFilePath = ride.samples.length
+    ? `users/${userId}/rides/${rideDocument.id}/samples.v1.json`
+    : null;
+  const sampleFile = sampleFilePath ? ref(storage, sampleFilePath) : null;
 
   try {
+    await uploadBytes(originalFile, file, {
+      contentType:
+        extension === "gpx" ? "application/gpx+xml" : "application/octet-stream",
+      customMetadata: { originalFileName: file.name },
+    });
+
+    if (sampleFile) {
+      const samplePayload: StoredRideSamples = { version: 1, samples: ride.samples };
+      await uploadBytes(sampleFile, new TextEncoder().encode(JSON.stringify(samplePayload)), {
+        contentType: "application/json",
+      });
+    }
+
     await setDoc(rideDocument, {
       userId,
       activityDate: activityDate ? Timestamp.fromDate(activityDate) : null,
@@ -98,14 +131,19 @@ export async function saveRide(
       originalFileName: file.name,
       source: ride.source,
       originalFilePath,
+      sampleFilePath,
       ...summaryFromRide(ride),
     });
   } catch (error) {
-    try {
-      await deleteObject(originalFile);
-    } catch (cleanupError) {
-      console.error("Unable to clean up uploaded ride file:", cleanupError);
-    }
+    const cleanupResults = await Promise.allSettled([
+      deleteObject(originalFile),
+      ...(sampleFile ? [deleteObject(sampleFile)] : []),
+    ]);
+    cleanupResults.forEach((result) => {
+      if (result.status === "rejected") {
+        console.error("Unable to clean up uploaded ride file:", result.reason);
+      }
+    });
     throw error;
   }
 

@@ -1,3 +1,12 @@
+export interface RideSample {
+	elapsedSeconds: number;
+	power: number | null;
+	speedMph: number | null;
+	cadence: number | null;
+	elevationFeet: number | null;
+	distanceMiles: number | null;
+}
+
 export interface RideData {
 	source: "gpx" | "fit";
 
@@ -42,4 +51,7 @@ export interface RideData {
 	cadenceSamples: number[];
 	speedSamples: number[];
 	heartRateSamples: number[];
+
+	/** One aligned timeline shared by ride-detail visualizations. */
+	samples: RideSample[];
 }

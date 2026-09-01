@@ -6,9 +6,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RideSummary } from "@/components/rides/RideSummary";
+import { RideHistoryAnalytics } from "@/components/rides/RideHistoryAnalytics";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
 import { getRideFileSource, processRideFile } from "@/lib/rides/import";
+import { formatElevationGain, formatRideDistance } from "@/lib/rides/formatters";
 import { getRides, saveRide } from "@/lib/rides/persistence";
 import type { ProcessedRide, SavedRide } from "@/lib/rides/types";
 import { cn } from "@/lib/utils";
@@ -101,7 +103,17 @@ export function RidesPageContent({ userId }: RidesPageContentProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-start">
+    <div className="space-y-8">
+      {!loadingRides && (
+        <RideHistoryAnalytics rides={rides.map((ride) => ({
+          id: ride.id,
+          date: rideDate(ride),
+          distanceMiles: ride.distanceMiles,
+          durationSeconds: ride.durationSeconds,
+          elevationGainFeet: ride.elevationGainFeet,
+        }))} />
+      )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-start">
       <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
         <div>
           <h2 className="font-semibold">Upload new ride</h2>
@@ -193,10 +205,10 @@ export function RidesPageContent({ userId }: RidesPageContentProps) {
                     <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium uppercase">{ride.source}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <span>{ride.distanceMiles.toFixed(1)} mi</span>
+                    <span>{formatRideDistance(ride.distanceMiles)}</span>
                     <span>{Math.round(ride.durationSeconds / 60)} min</span>
                     {ride.averagePower !== null && <span>{Math.round(ride.averagePower)} W avg</span>}
-                    <span>{Math.round(ride.elevationGainFeet)} ft</span>
+                    <span>{formatElevationGain(ride.elevationGainFeet)}</span>
                   </div>
                 </Link>
               </li>
@@ -204,6 +216,7 @@ export function RidesPageContent({ userId }: RidesPageContentProps) {
           </ul>
         )}
       </section>
+      </div>
     </div>
   );
 }

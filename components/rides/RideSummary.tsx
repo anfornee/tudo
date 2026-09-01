@@ -1,5 +1,6 @@
 import { CalendarDays, Clock3, Gauge, Mountain, Zap } from "lucide-react";
 
+import { formatElevationGain, formatRideDistance, formatRideDuration } from "@/lib/rides/formatters";
 import type { RideSummaryMetrics, RideSource } from "@/lib/rides/types";
 
 interface RideSummaryProps {
@@ -7,13 +8,6 @@ interface RideSummaryProps {
   source: RideSource;
   activityDate: Date | null;
   fileName?: string;
-}
-
-function formatDuration(seconds: number) {
-  const totalMinutes = Math.round(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 function formatDate(date: Date | null) {
@@ -31,13 +25,13 @@ export function RideSummary({
   fileName,
 }: RideSummaryProps) {
   const metrics = [
-    { label: "Distance", value: `${ride.distanceMiles.toFixed(1)} mi` },
-    { label: "Duration", value: formatDuration(ride.durationSeconds) },
+    { label: "Distance", value: formatRideDistance(ride.distanceMiles) },
+    { label: "Duration", value: formatRideDuration(ride.durationSeconds) },
     ...(Math.round(ride.movingTimeSeconds) !== Math.round(ride.durationSeconds)
-      ? [{ label: "Moving time", value: formatDuration(ride.movingTimeSeconds) }]
+      ? [{ label: "Moving time", value: formatRideDuration(ride.movingTimeSeconds) }]
       : []),
     { label: "Average speed", value: `${ride.averageSpeedMph.toFixed(1)} mph` },
-    { label: "Elevation", value: `${Math.round(ride.elevationGainFeet)} ft` },
+    { label: "Elevation", value: formatElevationGain(ride.elevationGainFeet) },
     ...(ride.calories !== null
       ? [{ label: "Calories", value: `${Math.round(ride.calories)} kcal` }]
       : []),

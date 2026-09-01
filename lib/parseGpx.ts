@@ -1,4 +1,4 @@
-import type { RideData } from "./ride.types";
+import type { RideData, RideSample } from "./ride.types";
 import {
 	calculateBestAverage,
 	calculateNormalizedPower,
@@ -466,6 +466,47 @@ export function analyzeGpx(
 				1000
 			: null;
 
+	const firstTimestamp = points.find((point) => point.timestamp)?.timestamp;
+	let cumulativeDistanceMeters = 0;
+	const samples: RideSample[] = points.flatMap((point, index) => {
+		if (index > 0) {
+			const previous = points[index - 1];
+			cumulativeDistanceMeters += haversineDistance(
+				previous.latitude,
+				previous.longitude,
+				point.latitude,
+				point.longitude,
+			);
+		}
+
+		if (!firstTimestamp || !point.timestamp) return [];
+		const elapsedSeconds = (point.timestamp.getTime() - firstTimestamp.getTime()) / 1000;
+		if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0) return [];
+
+		let speedMph: number | null = null;
+		const previous = points[index - 1];
+		if (previous?.timestamp) {
+			const segmentSeconds = (point.timestamp.getTime() - previous.timestamp.getTime()) / 1000;
+			if (segmentSeconds > 0) {
+				speedMph = haversineDistance(
+					previous.latitude,
+					previous.longitude,
+					point.latitude,
+					point.longitude,
+				) / segmentSeconds * 2.236936;
+			}
+		}
+
+		return [{
+			elapsedSeconds,
+			power: point.power ?? null,
+			speedMph,
+			cadence: point.cadence ?? null,
+			elevationFeet: point.elevation === undefined ? null : point.elevation * 3.28084,
+			distanceMiles: cumulativeDistanceMeters / 1609.344,
+		}];
+	});
+
 	return {
 		source: "gpx",
 
@@ -595,6 +636,7 @@ export function analyzeGpx(
 			),
 
 		heartRateSamples,
+		samples,
 
 		/*
 		 * Keep the unused values intentionally out of
