@@ -1,225 +1,352 @@
+"use client";
+
+import { onAuthStateChanged } from "firebase/auth";
 import {
-	CalendarDays,
-	Clock3,
-	Gauge,
-	Mountain,
-	Zap,
+	ArrowLeft,
+	Loader2,
+	RefreshCw,
+	Trash2,
 } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
+import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog";
+import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
+import { RideCharts } from "@/components/rides/RideCharts";
+import { RideSummary } from "@/components/rides/RideSummary";
+import { Button } from "@/components/ui/button";
+import { auth } from "@/lib/firebase-client";
+import type { RideSample } from "@/lib/ride.types";
 import {
-	formatElevationGain,
-	formatRideDistance,
-	formatRideDuration,
-} from "@/lib/rides/formatters";
-import type {
-	RideSource,
-	RideSummaryMetrics,
-} from "@/lib/rides/types";
+	deleteRide,
+	getRide,
+	getRideSamples,
+} from "@/lib/rides/persistence";
+import { reanalyzeRide } from "@/lib/rides/reanalysis";
+import type { SavedRide } from "@/lib/rides/types";
 
-interface RideSummaryProps {
-	ride: RideSummaryMetrics;
-	source: RideSource;
-	activityDate: Date | null;
-	fileName?: string;
+interface SavedRideContentProps {
+	userId: string;
+	rideId: string;
 }
 
-function formatDate(
-	date: Date | null,
-) {
-	if (!date) {
-		return "Date unavailable";
+export function SavedRideContent({
+	userId,
+	rideId,
+}: SavedRideContentProps) {
+	const [ride, setRide] = useState<SavedRide | null>(null);
+	const [loading, setLoading] = useState(true);
+
+	const [samples, setSamples] =
+		useState<RideSample[] | null>(null);
+
+	const [samplesLoading, setSamplesLoading] =
+		useState(false);
+
+	const [reanalyzing, setReanalyzing] =
+		useState(false);
+
+	const [deleting, setDeleting] =
+		useState(false);
+
+	const [showReanalyzeDialog, setShowReanalyzeDialog] =
+		useState(false);
+
+	const [showDeleteDialog, setShowDeleteDialog] =
+		useState(false);
+
+	const [error, setError] =
+		useState<string | null>(null);
+
+	const [message, setMessage] =
+		useState<string | null>(null);
+
+	async function loadSamples(savedRide: SavedRide) {
+		if (!savedRide.sampleFilePath) {
+			setSamples(null);
+			return;
+		}
+
+		setSamplesLoading(true);
+
+		try {
+			setSamples(
+				await getRideSamples(savedRide),
+			);
+		} catch (error) {
+			console.error(
+				"Unable to load ride samples:",
+				error,
+			);
+
+			setSamples(null);
+		} finally {
+			setSamplesLoading(false);
+		}
 	}
 
-	return new Intl.DateTimeFormat(
-		"en-US",
-		{
-			dateStyle: "medium",
-			timeStyle: "short",
-		},
-	).format(date);
-}
+	useEffect(() => {
+		const unsubscribe = onAuthStateChanged(
+			auth,
+			(user) => {
+				if (!user || user.uid !== userId) {
+					window.location.assign(
+						"/api/auth/logout",
+					);
+					return;
+				}
 
-export function RideSummary({
-	ride,
-	source,
-	activityDate,
-	fileName,
-}: RideSummaryProps) {
-	const metrics = [
-		{
-			label: "Distance",
-			value: formatRideDistance(
-				ride.distanceMiles,
-			),
-		},
-		{
-			label: "Duration",
-			value: formatRideDuration(
-				ride.durationSeconds,
-			),
-		},
-		...(Math.round(
-			ride.movingTimeSeconds,
-		) !==
-		Math.round(
-			ride.durationSeconds,
-		)
-			? [
-					{
-						label: "Moving time",
-						value: formatRideDuration(
-							ride.movingTimeSeconds,
-						),
-					},
-				]
-			: []),
-		{
-			label: "Average speed",
-			value: `${ride.averageSpeedMph.toFixed(1)} mph`,
-		},
-		{
-			label: "Elevation",
-			value: formatElevationGain(
-				ride.elevationGainFeet,
-			),
-		},
-		...(ride.calories !== null
-			? [
-					{
-						label: "Calories",
-						value: `${Math.round(
-							ride.calories,
-						)} kcal`,
-					},
-				]
-			: []),
-		...(ride.averagePower !== null
-			? [
-					{
-						label: "Average power",
-						value: `${Math.round(
-							ride.averagePower,
-						)} W`,
-					},
-				]
-			: []),
-		...(ride.maxPower !== null
-			? [
-					{
-						label: "Maximum power",
-						value: `${Math.round(
-							ride.maxPower,
-						)} W`,
-					},
-				]
-			: []),
-		...(ride.normalizedPower !== null
-			? [
-					{
-						label: "Normalized power",
-						value: `${Math.round(
-							ride.normalizedPower,
-						)} W`,
-					},
-				]
-			: []),
-		...(ride.averageCadence !== null
-			? [
-					{
-						label: "Average cadence",
-						value: `${Math.round(
-							ride.averageCadence,
-						)} rpm`,
-					},
-				]
-			: []),
-		...(ride.maxCadence !== null
-			? [
-					{
-						label: "Maximum cadence",
-						value: `${Math.round(
-							ride.maxCadence,
-						)} rpm`,
-					},
-				]
-			: []),
-		...(ride.averageHeartRate !== null
-			? [
-					{
-						label: "Average heart rate",
-						value: `${Math.round(
-							ride.averageHeartRate,
-						)} bpm`,
-					},
-				]
-			: []),
-		...(ride.maxHeartRate !== null
-			? [
-					{
-						label: "Maximum heart rate",
-						value: `${Math.round(
-							ride.maxHeartRate,
-						)} bpm`,
-					},
-				]
-			: []),
-	];
+				void getRide(userId, rideId)
+					.then((savedRide) => {
+						if (!savedRide) {
+							setError(
+								"This saved ride could not be found.",
+							);
+
+							return;
+						}
+
+						setRide(savedRide);
+
+						void loadSamples(savedRide);
+					})
+					.catch((error) => {
+						console.error(
+							"Unable to load ride:",
+							error,
+						);
+
+						setError(
+							"Unable to load this saved ride.",
+						);
+					})
+					.finally(() => {
+						setLoading(false);
+					});
+			},
+		);
+
+		return unsubscribe;
+	}, [rideId, userId]);
+
+	async function handleReanalyze() {
+		if (!ride || reanalyzing || deleting) {
+			return;
+		}
+
+		setReanalyzing(true);
+		setError(null);
+		setMessage(null);
+
+		try {
+			const result = await reanalyzeRide(
+				userId,
+				ride.id,
+			);
+
+			setRide(result.ride);
+
+			await loadSamples(result.ride);
+
+			setShowReanalyzeDialog(false);
+
+			setMessage(
+				"Ride re-analyzed using the original activity file.",
+			);
+		} catch (error) {
+			console.error(
+				"Unable to re-analyze ride:",
+				error,
+			);
+
+			setError(
+				error instanceof Error
+					? error.message
+					: "Unable to re-analyze this ride. Please try again.",
+			);
+		} finally {
+			setReanalyzing(false);
+		}
+	}
+
+	async function handleDelete() {
+		if (!ride || deleting || reanalyzing) {
+			return;
+		}
+
+		setDeleting(true);
+		setError(null);
+		setMessage(null);
+
+		try {
+			await deleteRide(
+				userId,
+				ride,
+			);
+
+			window.location.assign("/rides");
+		} catch (error) {
+			console.error(
+				"Unable to delete ride:",
+				error,
+			);
+
+			setError(
+				"Unable to delete this ride. Please try again.",
+			);
+
+			setDeleting(false);
+		}
+	}
+
+	if (loading) {
+		return (
+			<div className="flex min-h-48 items-center justify-center rounded-xl border bg-card">
+				<Loader2 className="size-6 animate-spin text-muted-foreground" />
+			</div>
+		);
+	}
+
+	if (!ride) {
+		return (
+			<div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
+				{error ??
+					"This saved ride could not be found."}
+			</div>
+		);
+	}
 
 	return (
-		<div className="space-y-4">
-			<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-				<span className="flex items-center gap-1.5">
-					<CalendarDays className="size-4" />
-					{formatDate(
-						activityDate,
-					)}
-				</span>
+		<div className="space-y-6">
+			<section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+				<div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+					<Link
+						href="/rides"
+						className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+					>
+						<ArrowLeft className="size-4" />
+						Back to rides
+					</Link>
 
-				<span className="rounded-md bg-muted px-2 py-1 text-xs font-medium uppercase">
-					{source}
-				</span>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={
+								reanalyzing ||
+								deleting ||
+								!ride.originalFilePath
+							}
+							onClick={() =>
+								setShowReanalyzeDialog(true)
+							}
+							title={
+								ride.originalFilePath
+									? "Re-analyze the original activity file"
+									: "Original activity file unavailable"
+							}
+						>
+							{reanalyzing ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<RefreshCw className="size-4" />
+							)}
 
-				{fileName && (
-					<span className="min-w-0 truncate">
-						{fileName}
-					</span>
+							{reanalyzing
+								? "Analyzing…"
+								: "Re-analyze"}
+						</Button>
+
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							disabled={
+								deleting ||
+								reanalyzing
+							}
+							onClick={() =>
+								setShowDeleteDialog(true)
+							}
+							className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+						>
+							{deleting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<Trash2 className="size-4" />
+							)}
+
+							{deleting
+								? "Deleting…"
+								: "Delete"}
+						</Button>
+					</div>
+				</div>
+
+				{error && (
+					<p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+						{error}
+					</p>
 				)}
-			</div>
 
-			<dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-				{metrics.map(
-					(metric, index) => {
-						const Icon = [
-							Gauge,
-							Clock3,
-							Mountain,
-							Zap,
-						][index % 4];
-
-						return (
-							<div
-								key={
-									metric.label
-								}
-								className="rounded-xl border bg-background p-3"
-							>
-								<dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-									<Icon className="size-3.5" />
-									{
-										metric.label
-									}
-								</dt>
-
-								<dd className="mt-1 font-semibold tabular-nums">
-									{
-										metric.value
-									}
-								</dd>
-							</div>
-						);
-					},
+				{message && (
+					<p className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+						{message}
+					</p>
 				)}
-			</dl>
+
+				<RideSummary
+					ride={ride}
+					source={ride.source}
+					activityDate={
+						(
+							ride.activityDate ??
+							ride.importedAt
+						)?.toDate() ??
+						null
+					}
+					fileName={
+						ride.originalFileName
+					}
+				/>
+			</section>
+
+			{samplesLoading ? (
+				<div className="flex min-h-40 items-center justify-center rounded-xl border bg-card">
+					<Loader2 className="size-5 animate-spin text-muted-foreground" />
+				</div>
+			) : (
+				<RideCharts samples={samples} />
+			)}
+
+			<ReanalyzeRideDialog
+				ride={ride}
+				open={showReanalyzeDialog}
+				processing={reanalyzing}
+				onOpenChange={(open) => {
+					if (!reanalyzing) {
+						setShowReanalyzeDialog(open);
+					}
+				}}
+				onConfirm={() => {
+					void handleReanalyze();
+				}}
+			/>
+
+			<DeleteRideDialog
+				ride={ride}
+				open={showDeleteDialog}
+				deleting={deleting}
+				onOpenChange={(open) => {
+					if (!deleting) {
+						setShowDeleteDialog(open);
+					}
+				}}
+				onConfirm={() => {
+					void handleDelete();
+				}}
+			/>
 		</div>
 	);
 }
