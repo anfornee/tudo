@@ -136,7 +136,11 @@ export function ReanalyzeRideDialog({
 
 				<AlertDialogFooter>
 					{successful ? (
-						<AlertDialogAction>
+						<AlertDialogAction
+							onClick={() => {
+								onOpenChange(false);
+							}}
+						>
 							Done
 						</AlertDialogAction>
 					) : (
