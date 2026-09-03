@@ -5,6 +5,7 @@ import {
 	initializeApp,
 } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getMessaging } from "firebase-admin/messaging";
 import {
 	configureFirebaseAdminEmulators,
 	isFirebaseEmulatorEnvironment,
@@ -36,3 +37,4 @@ const firebaseAdmin =
 			});
 
 export const adminAuth = getAuth(firebaseAdmin);
+export const adminMessaging = getMessaging(firebaseAdmin);

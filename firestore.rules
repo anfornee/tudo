@@ -12,6 +12,54 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
 
+    match /users/{userId}/bills/{billId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'name', 'amount', 'dueDay', 'category', 'isAutopay',
+          'isSubscription', 'notificationsEnabled', 'isActive',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.dueDay is int
+        && request.resource.data.dueDay >= 1
+        && request.resource.data.dueDay <= 31
+        && request.resource.data.category in [
+          'housing', 'utilities', 'transportation', 'insurance', 'debt',
+          'entertainment', 'fitness', 'health', 'education', 'other'
+        ]
+        && request.resource.data.isAutopay is bool
+        && request.resource.data.isSubscription is bool
+        && request.resource.data.notificationsEnabled is bool
+        && request.resource.data.isActive is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{userId}/notificationTokens/{tokenId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['token', 'createdAt', 'updatedAt'])
+        && request.resource.data.token is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /users/{userId}/preferences/notifications {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['timeZone', 'updatedAt'])
+        && request.resource.data.timeZone is string
+        && request.resource.data.updatedAt is timestamp;
+    }
+
     match /users/{userId}/preferences/dashboard {
       allow read: if request.auth != null
         && request.auth.uid == userId;

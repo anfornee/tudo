@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { RideBlock } from "@/components/dashboard/RideBlock";
 import { SudokuBlock } from "@/components/dashboard/SudokuBlock";
 import { WeatherBar } from "@/components/dashboard/WeatherBar";
+import { UpcomingBillCard } from "@/components/bills/UpcomingBillCard";
 import { useFeatureOrder } from "@/components/feature-order-provider";
 import {
   moveFeature,
@@ -221,6 +222,9 @@ export function DashboardFeatureGrid() {
                 )}
                 {featureId === "rides" && (
                   <RideBlock dragHandle={dragHandle} />
+                )}
+                {featureId === "bills" && (
+                  <UpcomingBillCard dragHandle={dragHandle} linkToBillsPage />
                 )}
               </div>
             </div>

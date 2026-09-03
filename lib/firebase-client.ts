@@ -24,6 +24,8 @@ const firebaseConfig = {
     (isFirebaseEmulatorEnvironment
       ? `${localFirebaseProjectId}.firebasestorage.app`
       : undefined),
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -47,4 +49,4 @@ if (
   globalFirebase.__tudoFirebaseEmulatorsConnected = true;
 }
 
-export { auth, db, storage };
+export { app as firebaseApp, auth, db, storage };
