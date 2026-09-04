@@ -16,8 +16,7 @@ export function TaskInput({ onAdd, compact = false }: { onAdd: (title: string) =
     setSaving(false);
   }
   return <form onSubmit={submit} className="flex min-w-0 gap-2">
-    <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Add a task…" aria-label="New task title" maxLength={500} disabled={saving} className={compact ? "h-8 text-sm" : "h-11"} />
+    <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Add a task…" aria-label="New task title" maxLength={500} disabled={saving} className={compact ? "h-8 text-base md:text-sm" : "h-11"} />
     <Button type="submit" size={compact ? "icon-sm" : "icon-lg"} disabled={saving || !title.trim()} aria-label="Add task"><Plus /></Button>
   </form>;
 }
-
