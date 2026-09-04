@@ -41,6 +41,29 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    match /users/{userId}/tasks/{taskId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'title', 'completed', 'order', 'createdAt', 'completedAt'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 500
+        && request.resource.data.completed is bool
+        && request.resource.data.order is int
+        && request.resource.data.order >= 0
+        && request.resource.data.createdAt is timestamp
+        && (request.resource.data.completedAt == null
+          || request.resource.data.completedAt is timestamp)
+        && (request.method != 'create'
+          || (!request.resource.data.completed
+            && request.resource.data.completedAt == null))
+        && (request.method != 'update'
+          || request.resource.data.createdAt == resource.data.createdAt);
+    }
+
     match /users/{userId}/notificationTokens/{tokenId} {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null
