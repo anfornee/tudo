@@ -1,6 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_TUDO_BUILD_ID: process.env.VERCEL_DEPLOYMENT_ID ?? randomUUID(),
+  },
   async headers() {
     return [
       {
