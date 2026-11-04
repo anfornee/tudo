@@ -48,6 +48,8 @@ interface RidesPageContentProps {
 	userId: string;
 }
 
+const RIDES_PAGE_SIZE = 5;
+
 function rideDate(ride: SavedRide) {
 	return (
 		(ride.activityDate ?? ride.importedAt)?.toDate() ??
@@ -61,6 +63,8 @@ export function RidesPageContent({
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [rides, setRides] = useState<SavedRide[]>([]);
+	const [visibleRideCount, setVisibleRideCount] =
+		useState(RIDES_PAGE_SIZE);
 
 	const [processedRide, setProcessedRide] =
 		useState<ProcessedRide | null>(null);
@@ -549,7 +553,7 @@ export function RidesPageContent({
 						</div>
 					) : (
 						<ul className="grid gap-3">
-							{rides.map(
+							{rides.slice(0, visibleRideCount).map(
 								(ride) => (
 									<li
 										key={
@@ -682,6 +686,23 @@ export function RidesPageContent({
 										</div>
 									</li>
 								),
+							)}
+
+							{visibleRideCount < rides.length && (
+								<li>
+									<Button
+										type="button"
+										variant="outline"
+										className="min-h-11 w-full"
+										onClick={() =>
+											setVisibleRideCount((current) =>
+												Math.min(current + RIDES_PAGE_SIZE, rides.length),
+											)
+										}
+									>
+										Show {Math.min(RIDES_PAGE_SIZE, rides.length - visibleRideCount)} more
+									</Button>
+								</li>
 							)}
 						</ul>
 					)}

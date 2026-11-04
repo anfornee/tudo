@@ -4,7 +4,7 @@
 
 Authenticated users can open `/rides`, choose or drop a `.fit` or `.gpx` cycling activity, review its normalized summary, and save it. Processing happens locally in the browser and shows a non-percentage loading state. Unsupported, empty, oversized (over 10 MB), malformed, and unusable activities produce a retryable error.
 
-Saved rides appear newest activity first and open at `/rides/{rideId}`. New rides retain an aligned detail timeline and the detail route displays responsive power, speed, cadence, and elevation charts. Power, speed, and cadence use elapsed time on the horizontal axis; elevation uses cumulative distance. Older rides continue to display their summary with a detailed-data unavailable state.
+Saved rides appear newest activity first and open at `/rides/{rideId}`. The previous-rides list initially shows five rides and expands five at a time. New rides retain an aligned detail timeline and the detail route displays responsive power, speed, cadence, and elevation charts. Power, speed, and cadence use elapsed time on the horizontal axis; elevation uses cumulative distance. Older rides continue to display their summary with a detailed-data unavailable state.
 
 The rides overview derives a recent weekly-distance chart, ride calendar, and weekly streaks from saved summary documents. It does not download detailed samples for historical rides.
 
