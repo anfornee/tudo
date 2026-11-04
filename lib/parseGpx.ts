@@ -67,9 +67,9 @@ function haversineDistance(
 }
 
 /**
- * Parse GPX XML into normalized track points.
+ * Read track point elements from a GPX file.
  */
-function parseTrackPoints(xml: string): TrackPoint[] {
+export function getGpxTrackElements(xml: string): Element[] {
 	const parser = new DOMParser();
 
 	const document = parser.parseFromString(
@@ -95,14 +95,13 @@ function parseTrackPoints(xml: string): TrackPoint[] {
 	 * Some GPX files don't use the GPX 1.1 namespace correctly.
 	 * Fall back to searching for trkpt elements by tag name.
 	 */
-	const points =
-		trackPoints.length > 0
-			? trackPoints
-			: Array.from(
-					document.getElementsByTagName("trkpt"),
-				);
+	return trackPoints.length > 0
+		? trackPoints
+		: Array.from(document.getElementsByTagName("trkpt"));
+}
 
-	return points.map((point): TrackPoint => {
+function parseTrackPoints(xml: string): TrackPoint[] {
+	return getGpxTrackElements(xml).map((point): TrackPoint => {
 		const latitude = Number(
 			point.getAttribute("lat"),
 		);

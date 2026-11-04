@@ -14,6 +14,7 @@ import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog";
 import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
 import type { ReanalysisStatus } from "@/components/rides/ReanalyzeRideDialog";
 import { RideCharts } from "@/components/rides/RideCharts";
+import { RideRouteSection } from "@/components/rides/RideRouteSection";
 import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
@@ -344,6 +345,8 @@ export function SavedRideContent({
 					}
 				/>
 			</section>
+
+			<RideRouteSection key={ride.originalFilePath || ride.id} ride={ride} />
 
 			{samplesLoading ? (
 				<div className="flex min-h-40 items-center justify-center rounded-xl border bg-card">

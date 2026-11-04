@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
+import { getRideStorageUrl } from "@/lib/rides/storage-url";
 
 interface SamplesRequest {
 	sampleFilePath: string;
@@ -98,13 +99,7 @@ export async function POST(
 		);
 	}
 
-	const encodedPath =
-		encodeURIComponent(
-			body.sampleFilePath,
-		);
-
-	const storageUrl =
-		`https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/o/${encodedPath}?alt=media`;
+	const storageUrl = getRideStorageUrl(body.sampleFilePath);
 
 	const storageResponse =
 		await fetch(

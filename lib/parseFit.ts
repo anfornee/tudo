@@ -15,9 +15,7 @@ interface FitRecordSample {
   distance: number | null;
 }
 
-export async function parseZwiftFit(
-	buffer: ArrayBuffer,
-): Promise<RideData> {
+export function decodeFitActivity(buffer: ArrayBuffer) {
   const stream = Stream.fromBuffer(new Uint8Array(buffer));
   const decoder = new Decoder(stream);
 
@@ -34,6 +32,11 @@ export async function parseZwiftFit(
     throw new Error(`Failed to parse FIT file: ${errors.join(", ")}`);
   }
 
+  return messages;
+}
+
+export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
+  const messages = decodeFitActivity(buffer);
   const records = messages.recordMesgs ?? [];
   const sessions = messages.sessionMesgs ?? [];
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
+import { getRideStorageUrl } from "@/lib/rides/storage-url";
 
 interface SourceRequest {
 	originalFilePath: string;
@@ -109,13 +110,7 @@ export async function POST(
 	 * Because THIS fetch happens server-side, browser CORS
 	 * rules do not apply.
 	 */
-	const encodedPath =
-		encodeURIComponent(
-			originalFilePath,
-		);
-
-	const storageUrl =
-		`https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/o/${encodedPath}?alt=media`;
+	const storageUrl = getRideStorageUrl(originalFilePath);
 
 	let storageResponse: Response;
 
