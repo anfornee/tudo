@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
     if (!timeZone) continue;
     let local: LocalParts;
     try { local = localParts(now, timeZone); } catch { continue; }
-    const autopayWindow = local.hour === 20 && local.minute < 15;
-    const dueWindow = local.hour === 9 && local.minute >= 30 && local.minute < 45;
+    const autopayWindow = local.hour === 20 && local.minute < 30;
+    const dueWindow = local.hour === 9 && local.minute >= 30;
     if (!autopayWindow && !dueWindow) continue;
     const target = autopayWindow ? addCalendarDays(local, 1) : local;
     const matching = bills.filter((bill) => bill.isAutopay === autopayWindow && effectiveDueDay(bill.dueDay, target.year, target.month) === target.day);
@@ -46,19 +46,54 @@ export async function POST(request: NextRequest) {
     const kind = autopayWindow ? "autopay" : "due";
     const key = `${target.year}-${String(target.month).padStart(2, "0")}-${String(target.day).padStart(2, "0")}-${kind}`;
     const deliveryRef = db.doc(`users/${userId}/billNotificationDeliveries/${key}`);
-    if ((await deliveryRef.get()).exists) continue;
-    const tokens = (await db.collection(`users/${userId}/notificationTokens`).get()).docs.map((item) => item.data().token as string).filter(Boolean);
-    if (!tokens.length) continue;
+    const tokenDocuments = (await db.collection(`users/${userId}/notificationTokens`).get()).docs
+      .map((item) => ({ ref: item.ref, token: item.data().token as unknown }))
+      .filter((item): item is typeof item & { token: string } => typeof item.token === "string" && item.token.length > 0);
+    if (!tokenDocuments.length) continue;
     const total = matching.reduce((sum, bill) => sum + bill.amount, 0);
     const single = matching.length === 1;
     const title = single ? `${matching[0].name} ${autopayWindow ? "tomorrow" : "due today"}` : `${matching.length} bills ${autopayWindow ? "coming out tomorrow" : "due today"}`;
     const body = single ? `${money(total)} is ${autopayWindow ? "scheduled for autopay tomorrow" : "due today"}.` : `${money(total)} total ${autopayWindow ? "scheduled for autopay" : "due"}.`;
-    await deliveryRef.create({ createdAt: FieldValue.serverTimestamp(), timeZone, billCount: matching.length });
+    const claimedDelivery = await db.runTransaction(async (transaction) => {
+      if ((await transaction.get(deliveryRef)).exists) return false;
+      transaction.create(deliveryRef, { createdAt: FieldValue.serverTimestamp(), timeZone, billCount: matching.length, status: "sending" });
+      return true;
+    });
+    if (!claimedDelivery) continue;
+    let notificationWasDelivered = false;
     try {
-      const response = await adminMessaging.sendEachForMulticast({ tokens, notification: { title, body }, data: { url: "/bills" }, webpush: { notification: { tag: `bills-${key}` } } });
+      const response = await adminMessaging.sendEachForMulticast({ tokens: tokenDocuments.map((item) => item.token), notification: { title, body }, data: { url: "/bills" }, webpush: { notification: { tag: `bills-${key}` } } });
+      const invalidTokenCodes = new Set([
+        "messaging/invalid-registration-token",
+        "messaging/registration-token-not-registered",
+      ]);
+      const invalidTokens = response.responses.flatMap((result, index) =>
+        !result.success && result.error?.code && invalidTokenCodes.has(result.error.code)
+          ? [tokenDocuments[index]]
+          : [],
+      );
+
+      await Promise.all(invalidTokens.map((item) => item.ref.delete())).catch((error) => {
+        console.error("Unable to remove invalid notification tokens:", error);
+      });
+
+      if (response.successCount === 0) {
+        await deliveryRef.delete();
+        continue;
+      }
+
+      notificationWasDelivered = true;
+      await deliveryRef.update({
+        status: "delivered",
+        deliveredAt: FieldValue.serverTimestamp(),
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+      });
       sent += response.successCount;
     } catch (error) {
-      await deliveryRef.delete();
+      if (!notificationWasDelivered) {
+        await deliveryRef.delete();
+      }
       throw error;
     }
   }

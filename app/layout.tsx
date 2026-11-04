@@ -10,12 +10,13 @@ const figtreeHeading = Figtree({subsets:['latin'],variable:'--font-heading'});
 const notoSans = Noto_Sans({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "tudo",
-	description: "Everything...",
+  applicationName: "Tudo",
+  title: "Tudo",
+	description: "Your personal everything hub.",
 	appleWebApp: {
 		capable: true,
 		statusBarStyle: "black-translucent",
-		title: "Everything",
+		title: "Tudo",
 	},
 };
 

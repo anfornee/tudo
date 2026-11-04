@@ -1,5 +1,5 @@
 export const WEATHER_LOCATION_STORAGE_KEY = "tudo:weather:last-location";
-export const WEATHER_LOCATION_FRESHNESS_MS = 6 * 60 * 60 * 1000;
+export const WEATHER_LOCATION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 export interface CachedWeatherLocation {
   latitude: number;
@@ -168,7 +168,7 @@ export function requestCurrentWeatherLocation(): Promise<CachedWeatherLocation> 
         {
           enableHighAccuracy: false,
           timeout: 10_000,
-          maximumAge: 5 * 60 * 1000,
+          maximumAge: WEATHER_LOCATION_FRESHNESS_MS,
         },
       );
     },

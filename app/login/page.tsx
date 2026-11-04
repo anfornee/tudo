@@ -2,12 +2,15 @@
 
 import { auth } from "@/lib/firebase-client";
 import {
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +22,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  markSessionRefreshed,
+  refreshServerSession,
+} from "@/lib/auth-session-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,7 +35,25 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
+  const [restoringSession, setRestoringSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      if (!user || submittingRef.current) {
+        setRestoringSession(false);
+        return;
+      }
+
+      void refreshServerSession(user)
+        .then(() => {
+          router.replace("/dashboard");
+          router.refresh();
+        })
+        .catch(() => setRestoringSession(false));
+    });
+  }, [router]);
 
   const sendTokenToBackend = async (idToken: string) => {
     const response = await fetch("/api/auth/login", {
@@ -43,6 +68,7 @@ export default function LoginPage() {
       throw new Error("Unable to create your session.");
     }
 
+    markSessionRefreshed();
     router.push("/dashboard");
     router.refresh();
   };
@@ -51,9 +77,11 @@ export default function LoginPage() {
     event.preventDefault();
 
     setLoading(true);
+    submittingRef.current = true;
     setError(null);
 
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const userCredential =
         mode === "signin"
           ? await signInWithEmailAndPassword(auth, email, password)
@@ -71,6 +99,7 @@ export default function LoginPage() {
           : "Unable to create your account."
       );
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -80,7 +109,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mb-3 text-sm font-medium tracking-[0.2em] text-muted-foreground uppercase">
-            Life Tracker
+            Tudo
           </div>
 
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -168,13 +197,15 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading}
+                disabled={loading || restoringSession}
               >
-                {loading && (
+                {(loading || restoringSession) && (
                   <Loader2 className="mr-2 size-4 animate-spin" />
                 )}
 
-                {mode === "signin"
+                {restoringSession
+                  ? "Restoring session"
+                  : mode === "signin"
                   ? "Sign in"
                   : "Create account"}
               </Button>

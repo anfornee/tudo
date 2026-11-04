@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import type { RideSample } from "@/lib/ride.types";
-import { formatRideElapsedTime } from "@/lib/rides/formatters";
+import { formatRideDistance, formatRideElapsedTime } from "@/lib/rides/formatters";
 import { deriveRideMetricDomain, downsampleRideSamples, type RideMetricDomainMode, type RideSampleMetric } from "@/lib/rides/samples";
 
 const WIDTH = 640;
@@ -17,10 +17,16 @@ interface RideMetricChartProps {
   unit: string;
   decimals?: number;
   domainMode?: RideMetricDomainMode;
+  xAxis?: "elapsed-time" | "distance";
 }
 
-export function RideMetricChart({ title, samples, metric, unit, decimals = 0, domainMode = "zero-based" }: RideMetricChartProps) {
-  const data = useMemo(() => downsampleRideSamples(samples, metric), [metric, samples]);
+export function RideMetricChart({ title, samples, metric, unit, decimals = 0, domainMode = "zero-based", xAxis = "elapsed-time" }: RideMetricChartProps) {
+  const data = useMemo(() => {
+    const eligibleSamples = xAxis === "distance"
+      ? samples.filter((sample) => sample.distanceMiles !== null && Number.isFinite(sample.distanceMiles))
+      : samples;
+    return downsampleRideSamples(eligibleSamples, metric);
+  }, [metric, samples, xAxis]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (!data.length) {
     return (
@@ -37,19 +43,22 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
   const domain = deriveRideMetricDomain(values, domainMode)!;
   const yMinimum = domain.minimum;
   const yMaximum = domain.maximum;
-  const elapsedMaximum = Math.max(1, data.at(-1)!.elapsedSeconds);
-  const x = (seconds: number) => PADDING.left + seconds / elapsedMaximum * (WIDTH - PADDING.left - PADDING.right);
+  const xValue = (sample: RideSample) => xAxis === "distance" ? sample.distanceMiles! : sample.elapsedSeconds;
+  const xMaximum = Math.max(xAxis === "distance" ? 0.1 : 1, ...data.map(xValue));
+  const x = (value: number) => PADDING.left + value / xMaximum * (WIDTH - PADDING.left - PADDING.right);
   const y = (value: number) => PADDING.top + (yMaximum - value) / (yMaximum - yMinimum) * (HEIGHT - PADDING.top - PADDING.bottom);
-  const path = data.map((sample, index) => `${index ? "L" : "M"}${x(sample.elapsedSeconds).toFixed(1)},${y(sample[metric]!).toFixed(1)}`).join(" ");
+  const path = data.map((sample, index) => `${index ? "L" : "M"}${x(xValue(sample)).toFixed(1)},${y(sample[metric]!).toFixed(1)}`).join(" ");
   const active = activeIndex === null ? null : data[activeIndex];
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   const formatValue = (value: number) => `${value.toFixed(decimals)} ${unit}`;
+  const formatXAxisValue = (value: number) => xAxis === "distance" ? formatRideDistance(value) : formatRideElapsedTime(value);
+  const xAxisDescription = xAxis === "distance" ? "distance" : "elapsed ride time";
 
   function selectNearest(clientX: number, bounds: DOMRect) {
-    const elapsed = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)) * elapsedMaximum;
+    const selectedValue = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)) * xMaximum;
     let nearest = 0;
     for (let index = 1; index < data.length; index += 1) {
-      if (Math.abs(data[index].elapsedSeconds - elapsed) < Math.abs(data[nearest].elapsedSeconds - elapsed)) nearest = index;
+      if (Math.abs(xValue(data[index]) - selectedValue) < Math.abs(xValue(data[nearest]) - selectedValue)) nearest = index;
     }
     setActiveIndex(nearest);
   }
@@ -65,7 +74,7 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className="h-auto w-full touch-pan-y"
           role="img"
-          aria-label={`${title} over elapsed ride time. Minimum ${formatValue(minimum)}, average ${formatValue(average)}, maximum ${formatValue(maximum)}.`}
+          aria-label={`${title} over ${xAxisDescription}. Minimum ${formatValue(minimum)}, average ${formatValue(average)}, maximum ${formatValue(maximum)}.`}
           onPointerMove={(event) => selectNearest(event.clientX, event.currentTarget.getBoundingClientRect())}
           onPointerLeave={() => setActiveIndex(null)}
         >
@@ -74,15 +83,15 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
             const labelValue = yMaximum - position * (yMaximum - yMinimum);
             return <g key={position}><line x1={PADDING.left} x2={WIDTH - PADDING.right} y1={gridY} y2={gridY} className="stroke-border" /><text x={PADDING.left - 8} y={gridY + 4} textAnchor="end" className="fill-muted-foreground text-[13px]">{labelValue.toFixed(decimals)}</text></g>;
           })}
-          <text x={PADDING.left} y={HEIGHT - 5} className="fill-muted-foreground text-[13px]">0:00</text>
-          <text x={WIDTH - PADDING.right} y={HEIGHT - 5} textAnchor="end" className="fill-muted-foreground text-[13px]">{formatRideElapsedTime(elapsedMaximum)}</text>
+          <text x={PADDING.left} y={HEIGHT - 5} className="fill-muted-foreground text-[13px]">{formatXAxisValue(0)}</text>
+          <text x={WIDTH - PADDING.right} y={HEIGHT - 5} textAnchor="end" className="fill-muted-foreground text-[13px]">{formatXAxisValue(xMaximum)}</text>
           <path d={path} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-          {active && <g><line x1={x(active.elapsedSeconds)} x2={x(active.elapsedSeconds)} y1={PADDING.top} y2={HEIGHT - PADDING.bottom} className="stroke-muted-foreground" strokeDasharray="3 3" /><circle cx={x(active.elapsedSeconds)} cy={y(active[metric]!)} r="4" fill="var(--primary)" /></g>}
+          {active && <g><line x1={x(xValue(active))} x2={x(xValue(active))} y1={PADDING.top} y2={HEIGHT - PADDING.bottom} className="stroke-muted-foreground" strokeDasharray="3 3" /><circle cx={x(xValue(active))} cy={y(active[metric]!)} r="4" fill="var(--primary)" /></g>}
         </svg>
         {active && (
           <div className="pointer-events-none absolute right-2 top-2 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-sm">
             <span className="font-medium">{formatValue(active[metric]!)}</span>
-            <span className="ml-2 text-muted-foreground">{formatRideElapsedTime(active.elapsedSeconds)}</span>
+            <span className="ml-2 text-muted-foreground">{formatXAxisValue(xValue(active))}</span>
           </div>
         )}
       </div>

@@ -2,10 +2,12 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Life Tracker",
-    short_name: "Life Tracker",
-    description: "A personal dashboard for tracking life.",
+    id: "/",
+    name: "Tudo",
+    short_name: "Tudo",
+    description: "Your personal everything hub.",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     background_color: "#09090b",
     theme_color: "#09090b",
@@ -21,6 +23,17 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "512x512",
         type: "image/png",
       },
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ],
+    shortcuts: [
+      { name: "Dashboard", short_name: "Home", url: "/dashboard" },
+      { name: "Weather", url: "/weather" },
+      { name: "Bills", url: "/bills" },
     ],
   };
 }

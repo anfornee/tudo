@@ -42,7 +42,7 @@ The last successful device location is stored locally under
 millisecond timestamp. It is never written to Firestore. Malformed cache entries
 are discarded safely, and Weather still works when local storage is unavailable.
 
-Cached coordinates remain fresh for six hours. A cached location is displayed
+Cached coordinates remain fresh for 24 hours. A cached location is displayed
 immediately even when stale:
 
 * Fresh cache avoids a geolocation request.

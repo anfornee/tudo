@@ -1,49 +1,18 @@
-import { adminAuth } from "@/lib/firebase-admin";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-
-const SESSION_DURATION = 60 * 60 * 24 * 14 * 1000; // 14 days
+import { createSession } from "@/lib/auth-session";
 
 export async function POST(request: Request) {
 	try {
-		const { idToken } = await request.json();
+		const body = (await request.json()) as { idToken?: unknown };
 
-		if (!idToken) {
+		if (typeof body.idToken !== "string" || !body.idToken) {
 			return NextResponse.json(
 				{ error: "Missing token" },
 				{ status: 400 }
 			);
 		}
 
-		// Optional but recommended:
-		// verify the user authenticated recently before issuing a long-lived session.
-		const decodedToken = await adminAuth.verifyIdToken(idToken);
-
-		const now = Math.floor(Date.now() / 1000);
-
-		if (
-			decodedToken.auth_time &&
-			now - decodedToken.auth_time > 5 * 60
-		) {
-			return NextResponse.json(
-				{ error: "Recent authentication required" },
-				{ status: 401 }
-			);
-		}
-
-		const sessionCookie = await adminAuth.createSessionCookie(idToken, {
-			expiresIn: SESSION_DURATION,
-		});
-
-		const cookieStore = await cookies();
-
-		cookieStore.set("session", sessionCookie, {
-			maxAge: SESSION_DURATION / 1000,
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			path: "/",
-			sameSite: "lax",
-		});
+		await createSession(body.idToken, { requireRecentAuthentication: true });
 
 		return NextResponse.json(
 			{ status: "success" },

@@ -29,6 +29,8 @@ import type {
 	StoredRideSamples,
 } from "@/lib/rides/types";
 
+import { summaryFromRide } from "@/lib/rides/summary";
+
 function ridesCollection(userId: string) {
 	return collection(db, "users", userId, "rides");
 }
@@ -205,24 +207,6 @@ export async function getRideSamples(
 	}
 
 	return stored.samples;
-}
-
-function summaryFromRide(ride: RideData) {
-	return {
-		distanceMiles: ride.distanceMiles,
-		durationSeconds: ride.durationSeconds,
-		movingTimeSeconds: ride.movingTimeSeconds,
-		averageSpeedMph: ride.averageSpeedMph,
-		elevationGainFeet: ride.elevationGainFeet,
-		calories: ride.calories,
-		averagePower: ride.averagePower,
-		maxPower: ride.maxPower,
-		normalizedPower: ride.normalizedPower,
-		averageCadence: ride.averageCadence,
-		maxCadence: ride.maxCadence,
-		averageHeartRate: ride.averageHeartRate,
-		maxHeartRate: ride.maxHeartRate,
-	};
 }
 
 export async function saveRide(

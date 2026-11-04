@@ -6,7 +6,7 @@ export function RideCharts({ samples }: { samples: RideSample[] | null }) {
     <section className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Ride charts</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Sensor data plotted against elapsed ride time.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Sensor data over elapsed time, with elevation plotted over distance.</p>
       </div>
       {!samples ? (
         <div className="rounded-xl border border-dashed bg-card/50 px-5 py-8 text-center">
@@ -18,7 +18,7 @@ export function RideCharts({ samples }: { samples: RideSample[] | null }) {
           <RideMetricChart title="Power" samples={samples} metric="power" unit="W" />
           <RideMetricChart title="Speed" samples={samples} metric="speedMph" unit="mph" decimals={1} />
           <RideMetricChart title="Cadence" samples={samples} metric="cadence" unit="rpm" />
-          <RideMetricChart title="Elevation" samples={samples} metric="elevationFeet" unit="ft" domainMode="padded" />
+          <RideMetricChart title="Elevation" samples={samples} metric="elevationFeet" unit="ft" domainMode="padded" xAxis="distance" />
         </div>
       )}
     </section>

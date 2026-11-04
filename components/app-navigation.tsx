@@ -15,7 +15,7 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppNavigation() {
+export function AppNavigation({ userId }: { userId: string }) {
   const pathname = usePathname();
   const { navigationFeatures } = useFeatureOrder();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -83,6 +83,12 @@ export function AppNavigation() {
     setIsLoggingOut(true);
 
     try {
+      const { disableBillNotifications } = await import(
+        "@/lib/bills/notifications"
+      );
+      await disableBillNotifications(userId).catch((error) => {
+        console.error("Unable to remove notification registration:", error);
+      });
       await auth.signOut();
     } finally {
       window.location.assign("/api/auth/logout");
