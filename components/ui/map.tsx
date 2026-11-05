@@ -1391,6 +1391,7 @@ function MapRoute({
   const id = propId ?? autoId;
   const sourceId = `route-source-${id}`;
   const layerId = `route-layer-${id}`;
+  const interactionLayerId = `route-interaction-layer-${id}`;
   const [ready, setReady] = useState(false);
 
   // Callers often pass `data?.coordinates ?? []`, a fresh array each render.
@@ -1453,6 +1454,20 @@ function MapRoute({
 
     map.addLayer(
       {
+        id: interactionLayerId,
+        type: "line",
+        source: sourceId,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "rgba(0, 0, 0, 0)",
+          "line-width": Math.max(18, resolvedWidth + 12),
+        },
+      },
+      resolveBeforeId(map, beforeId),
+    );
+
+    map.addLayer(
+      {
         id: layerId,
         type: "line",
         source: sourceId,
@@ -1475,6 +1490,7 @@ function MapRoute({
       setReady(false);
       try {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getLayer(interactionLayerId)) map.removeLayer(interactionLayerId);
         if (map.getSource(sourceId)) map.removeSource(sourceId);
       } catch {
         // ignore
@@ -1507,6 +1523,9 @@ function MapRoute({
     map.setPaintProperty(layerId, "line-width", resolvedWidth);
     map.setPaintProperty(layerId, "line-opacity", resolvedOpacity);
     map.setPaintProperty(layerId, "line-dasharray", resolvedDashArray);
+    if (map.getLayer(interactionLayerId)) {
+      map.setPaintProperty(interactionLayerId, "line-width", Math.max(18, resolvedWidth + 12));
+    }
   }, [
     isLoaded,
     map,
@@ -1515,6 +1534,7 @@ function MapRoute({
     resolvedWidth,
     resolvedOpacity,
     resolvedDashArray,
+    interactionLayerId,
   ]);
 
   // Raise the active route (and anything it owns) above its siblings. With a
@@ -1538,7 +1558,7 @@ function MapRoute({
       if (layerSet === lastLayerSet) return;
       lastLayerSet = layerSet;
 
-      const owned = [layerId, ...childLayersRef.current].filter((entry) =>
+      const owned = [interactionLayerId, layerId, ...childLayersRef.current].filter((entry) =>
         map.getLayer(entry),
       );
       if (owned.length === 0) return;
@@ -1557,7 +1577,7 @@ function MapRoute({
     return () => {
       map.off("styledata", raise);
     };
-  }, [ready, map, active, layerId, beforeId]);
+  }, [ready, map, active, interactionLayerId, layerId, beforeId]);
 
   // Handle click and hover events
   useEffect(() => {
@@ -1576,21 +1596,21 @@ function MapRoute({
     };
     const handleMouseMove = (event: MapLibreGL.MapMouseEvent) => onMouseMove?.(event);
 
-    map.on("click", layerId, handleClick);
-    map.on("mouseenter", layerId, handleMouseEnter);
-    map.on("mouseleave", layerId, handleMouseLeave);
-    map.on("mousemove", layerId, handleMouseMove);
+    map.on("click", interactionLayerId, handleClick);
+    map.on("mouseenter", interactionLayerId, handleMouseEnter);
+    map.on("mouseleave", interactionLayerId, handleMouseLeave);
+    map.on("mousemove", interactionLayerId, handleMouseMove);
 
     return () => {
-      map.off("click", layerId, handleClick);
-      map.off("mouseenter", layerId, handleMouseEnter);
-      map.off("mouseleave", layerId, handleMouseLeave);
-      map.off("mousemove", layerId, handleMouseMove);
+      map.off("click", interactionLayerId, handleClick);
+      map.off("mouseenter", interactionLayerId, handleMouseEnter);
+      map.off("mouseleave", interactionLayerId, handleMouseLeave);
+      map.off("mousemove", interactionLayerId, handleMouseMove);
     };
   }, [
     isLoaded,
     map,
-    layerId,
+    interactionLayerId,
     onClick,
     onMouseEnter,
     onMouseLeave,

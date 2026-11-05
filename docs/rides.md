@@ -30,11 +30,12 @@ The original file is stored at `users/{uid}/rides/{rideId}/original.fit` or `ori
 
 Ride detail charts and the route map share one transient `RideCursor`. Charts
 resolve pointer positions against the canonical sample array (with cached
-timestamp/distance lookup tables), while the map uses a small spatial hash for
-GPS samples. A user interaction updates the cursor once; charts and the map
+timestamp/distance lookup tables), while the map spatially indexes the original
+route geometry. A user interaction updates the cursor once; charts and the map
 only render the resulting position, which avoids feedback loops. Older sample
-sidecars remain readable, but because they predate GPS metadata their map and
-charts cannot be synchronized until the ride is re-analyzed.
+sidecars remain synchronized through cumulative-distance alignment with the
+retained source route; re-analysis is not required. New sidecars use their
+exact recorded GPS sample for the marker when it is available.
 
 New normalized samples retain optional timestamp, latitude, longitude, heart
 rate, and temperature fields. Null or unavailable sensor fields stay absent or
