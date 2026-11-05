@@ -58,3 +58,25 @@ file; development still connects all Firebase services to localhost.
 Production deployments continue to require the existing Firebase client,
 Firebase Admin, and Google Cloud environment variables. Emulator routing is
 enabled only when `NODE_ENV` is `development`.
+
+The road route planner additionally requires:
+
+- `OPENROUTESERVICE_API_KEY`, a server-only key used by the Next.js directions
+  Route Handler.
+- `NEXT_PUBLIC_ROUTE_MAP_STYLE_URL`, a browser-accessible, production-licensed
+  MapLibre style URL. Provider tokens embedded in this URL are public and should
+  be domain-restricted where possible.
+
+These are required locally as well if you want to interact with the planner map
+and calculate routes. The planner shows a configuration state when the style URL
+is absent; the directions endpoint returns a configuration error when the private
+routing key is absent.
+
+Run the focused Firebase ownership test with:
+
+```sh
+npm run test:rules
+```
+
+It starts temporary Auth, Firestore, and Storage emulators and verifies that one
+user cannot read another user's route summary or sidecar.

@@ -1,6 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
 import type { RideData, RideSample } from "@/lib/ride.types";
+import type { RideCalorieAnalysis } from "@/lib/rides/calories";
 
 export type RideSource = RideData["source"];
 
@@ -11,6 +12,7 @@ export interface RideSummaryMetrics {
   averageSpeedMph: number;
   elevationGainFeet: number;
   calories: number | null;
+  calorieAnalysis?: RideCalorieAnalysis | null;
   averagePower: number | null;
   maxPower: number | null;
   normalizedPower: number | null;

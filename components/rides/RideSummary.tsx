@@ -5,12 +5,14 @@ import {
 	Mountain,
 	Zap,
 } from "lucide-react";
+import Link from "next/link";
 
 import {
 	formatElevationGain,
 	formatRideDistance,
 	formatRideDuration,
 } from "@/lib/rides/formatters";
+import type { RideCalorieAnalysis } from "@/lib/rides/calories";
 import type {
 	RideSource,
 	RideSummaryMetrics,
@@ -21,7 +23,16 @@ interface RideSummaryProps {
 	source: RideSource;
 	activityDate: Date | null;
 	fileName?: string;
+	calorieAnalysis?: RideCalorieAnalysis | null;
 }
+
+const calorieMethodLabels: Record<RideCalorieAnalysis["method"], string> = {
+	recorded: "Recorded",
+	power: "Estimated from power",
+	heart_rate: "Estimated from heart rate",
+	speed_met: "Estimated from speed and duration",
+	duration_met: "Rough estimate",
+};
 
 function formatDate(date: Date | null) {
 	if (!date) {
@@ -42,7 +53,13 @@ export function RideSummary({
 	source,
 	activityDate,
 	fileName,
+	calorieAnalysis,
 }: RideSummaryProps) {
+	const selectedAnalysis = calorieAnalysis === undefined
+		? ride.calorieAnalysis ?? null
+		: calorieAnalysis;
+	const displayedCalories = selectedAnalysis?.calories ?? ride.calories ?? null;
+	const calorieMethod = selectedAnalysis?.method ?? (ride.calories !== null ? "recorded" : null);
 	const metrics = [
 		{
 			label: "Distance",
@@ -81,13 +98,14 @@ export function RideSummary({
 				ride.elevationGainFeet,
 			),
 		},
-		...(ride.calories !== null
+		...(displayedCalories !== null
 			? [
 					{
 						label: "Calories",
 						value: `${Math.round(
-							ride.calories,
+							displayedCalories,
 						)} kcal`,
+						detail: `${calorieMethod ? calorieMethodLabels[calorieMethod] : "Estimated"}.${selectedAnalysis?.lowerCalories !== null && selectedAnalysis?.lowerCalories !== undefined && selectedAnalysis.upperCalories !== null ? ` Likely range ${selectedAnalysis.lowerCalories}–${selectedAnalysis.upperCalories} kcal.` : ""}${selectedAnalysis?.source === "recorded" || (!selectedAnalysis && ride.calories != null) ? " The source device does not specify whether this is gross or active energy." : " Gross cycling-period energy; resting calories are not added separately."}`,
 					},
 				]
 			: []),
@@ -211,11 +229,25 @@ export function RideSummary({
 										metric.value
 									}
 								</dd>
+								{"detail" in metric && metric.detail ? (
+									<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+										{metric.detail}
+									</p>
+								) : null}
 							</div>
 						);
 					},
 				)}
 			</dl>
+			{displayedCalories === null ? (
+				<p className="text-sm text-muted-foreground">
+					Add a dated weight in{" "}
+					<Link href="/settings" className="font-medium text-primary hover:underline">
+						Rider Profile
+					</Link>{" "}
+					to estimate calories when a ride has no recorded value or sufficiently complete power data.
+				</p>
+			) : null}
 		</div>
 	);
 }

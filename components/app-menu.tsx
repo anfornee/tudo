@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
@@ -118,6 +118,22 @@ export function AppMenu({ pathname, features, isClosing, onClose }: AppMenuProps
                   </li>
                 );
               })}
+            <li className="mt-2 border-t pt-4">
+              <Link
+                href="/settings"
+                aria-current={isActiveRoute(pathname, "/settings") ? "page" : undefined}
+                onClick={onClose}
+                className={cn(
+                  "flex min-h-16 items-center gap-4 rounded-2xl border px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isActiveRoute(pathname, "/settings")
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/70 bg-card hover:bg-muted/60",
+                )}
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted"><Settings className="size-5" /></span>
+                <span className="font-medium">Settings</span>
+              </Link>
+            </li>
           </ul>
         </nav>
       </section>

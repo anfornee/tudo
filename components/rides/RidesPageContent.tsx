@@ -5,6 +5,7 @@ import {
 	Bike,
 	FileUp,
 	Loader2,
+	MapPinned,
 	RefreshCw,
 	Trash2,
 	Upload,
@@ -13,6 +14,7 @@ import Link from "next/link";
 import {
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -22,8 +24,11 @@ import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
 import type { ReanalysisStatus } from "@/components/rides/ReanalyzeRideDialog";
 import { RideHistoryAnalytics } from "@/components/rides/RideHistoryAnalytics";
 import { RideSummary } from "@/components/rides/RideSummary";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
+import { getRiderProfile } from "@/lib/rider-profile/persistence";
+import type { RiderProfile } from "@/lib/rider-profile/types";
+import { calorieInputFromRide, estimateCyclingCalories } from "@/lib/rides/calories";
 import {
 	formatElevationGain,
 	formatRideDistance,
@@ -63,6 +68,7 @@ export function RidesPageContent({
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [rides, setRides] = useState<SavedRide[]>([]);
+	const [riderProfile, setRiderProfile] = useState<RiderProfile | null>(null);
 	const [visibleRideCount, setVisibleRideCount] =
 		useState(RIDES_PAGE_SIZE);
 
@@ -143,11 +149,21 @@ export function RidesPageContent({
 				}
 
 				void loadRides();
+				void getRiderProfile(userId).then(setRiderProfile).catch((profileError) => {
+					console.error("Unable to load Rider Profile:", profileError);
+				});
 			},
 		);
 
 		return unsubscribe;
 	}, [loadRides, userId]);
+
+	const previewCalorieAnalysis = useMemo(() => processedRide
+		? estimateCyclingCalories(
+			calorieInputFromRide(processedRide.ride, processedRide.activityDate),
+			riderProfile,
+		)
+		: null, [processedRide, riderProfile]);
 
 	async function processFile(
 		file: File | undefined,
@@ -356,6 +372,14 @@ export function RidesPageContent({
 				/>
 			)}
 
+			<section className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+				<div className="flex items-start gap-3">
+					<span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted"><MapPinned className="size-5" /></span>
+					<div><h2 className="font-semibold">Route Planner</h2><p className="mt-1 text-sm text-muted-foreground">Plan road cycling routes, explore elevation, and export them for your next ride.</p></div>
+				</div>
+				<Link href="/rides/routes" className={buttonVariants({ className: "sm:self-center" })}>Plan a Route</Link>
+			</section>
+
 			<div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-start">
 				<section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
 					<div>
@@ -517,6 +541,7 @@ export function RidesPageContent({
 									processedRide
 										.activityDate
 								}
+								calorieAnalysis={previewCalorieAnalysis}
 							/>
 						</div>
 					)}

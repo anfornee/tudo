@@ -19,10 +19,12 @@ import { RideRouteSection } from "@/components/rides/RideRouteSection";
 import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
+import { getRiderProfile } from "@/lib/rider-profile/persistence";
 import type { RideSample } from "@/lib/ride.types";
 import { type RideCursor } from "@/lib/rides/cursor";
 import {
 	deleteRide,
+	ensureRideCalorieAnalysis,
 	getRide,
 	getRideSamples,
 } from "@/lib/rides/persistence";
@@ -86,15 +88,15 @@ export function SavedRideContent({
 	async function loadSamples(savedRide: SavedRide) {
 		if (!savedRide.sampleFilePath) {
 			setSamples(null);
-			return;
+			return [];
 		}
 
 		setSamplesLoading(true);
 
 		try {
-			setSamples(
-				await getRideSamples(savedRide),
-			);
+			const loadedSamples = await getRideSamples(savedRide);
+			setSamples(loadedSamples);
+			return loadedSamples ?? [];
 		} catch (error) {
 			console.error(
 				"Unable to load ride samples:",
@@ -102,6 +104,7 @@ export function SavedRideContent({
 			);
 
 			setSamples(null);
+			return [];
 		} finally {
 			setSamplesLoading(false);
 		}
@@ -119,7 +122,7 @@ export function SavedRideContent({
 				}
 
 				void getRide(userId, rideId)
-					.then((savedRide) => {
+					.then(async (savedRide) => {
 						if (!savedRide) {
 							setError(
 								"This saved ride could not be found.",
@@ -130,7 +133,15 @@ export function SavedRideContent({
 
 						setRide(savedRide);
 
-						void loadSamples(savedRide);
+						const [loadedSamples, riderProfile] = await Promise.all([
+							loadSamples(savedRide),
+							getRiderProfile(userId),
+						]);
+						try {
+							setRide(await ensureRideCalorieAnalysis(userId, savedRide, loadedSamples, riderProfile));
+						} catch (analysisError) {
+							console.error("Unable to save ride calorie analysis:", analysisError);
+						}
 					})
 					.catch((error) => {
 						console.error(

@@ -4,6 +4,7 @@ import {
 	doc,
 	getDoc,
 	getDocs,
+	runTransaction,
 	serverTimestamp,
 	setDoc,
 	Timestamp,
@@ -30,6 +31,9 @@ import type {
 } from "@/lib/rides/types";
 
 import { summaryFromRide } from "@/lib/rides/summary";
+import { getRiderProfile } from "@/lib/rider-profile/persistence";
+import type { RiderProfile } from "@/lib/rider-profile/types";
+import { calorieInputFromSummary, estimateCyclingCalories } from "@/lib/rides/calories";
 
 function ridesCollection(userId: string) {
 	return collection(db, "users", userId, "rides");
@@ -220,6 +224,10 @@ export async function saveRide(
 	ride: RideData,
 	activityDate: Date | null,
 ): Promise<SavedRide> {
+	const riderProfile = await getRiderProfile(userId).catch((profileError) => {
+		console.error("Unable to load Rider Profile for calorie estimation:", profileError);
+		return null;
+	});
 	const rideDocument = doc(
 		ridesCollection(userId),
 	);
@@ -286,7 +294,7 @@ export async function saveRide(
 				source: ride.source,
 				originalFilePath,
 				sampleFilePath,
-				...summaryFromRide(ride),
+				...summaryFromRide(ride, riderProfile, activityDate),
 			},
 		);
 	} catch (error) {
@@ -330,6 +338,10 @@ export async function replaceRideAnalysis(
 	ride: RideData,
 	activityDate: Date | null,
 ): Promise<SavedRide> {
+	const riderProfile = await getRiderProfile(userId).catch((profileError) => {
+		console.error("Unable to load Rider Profile for calorie estimation:", profileError);
+		return null;
+	});
 	const rideDocument = doc(
 		ridesCollection(userId),
 		existingRide.id,
@@ -408,7 +420,7 @@ export async function replaceRideAnalysis(
 					: null,
 				source: ride.source,
 				sampleFilePath: nextSampleFilePath,
-				...summaryFromRide(ride),
+				...summaryFromRide(ride, riderProfile, activityDate),
 			},
 		);
 	} catch (error) {
@@ -472,6 +484,34 @@ export async function replaceRideAnalysis(
 	}
 
 	return updatedRide;
+}
+
+export async function ensureRideCalorieAnalysis(
+	userId: string,
+	ride: SavedRide,
+	samples: readonly RideSample[],
+	profile: RiderProfile | null,
+) {
+	if (ride.calorieAnalysis) return ride;
+
+	const calorieAnalysis = estimateCyclingCalories(
+		calorieInputFromSummary(ride, samples),
+		profile,
+	);
+
+	if (!calorieAnalysis) return ride;
+
+	const reference = doc(ridesCollection(userId), ride.id);
+	const wroteAnalysis = await runTransaction(db, async (transaction) => {
+		const current = await transaction.get(reference);
+		if (!current.exists()) throw new Error("Ride not found.");
+		if (current.data().calorieAnalysis) return false;
+		transaction.update(reference, { calorieAnalysis });
+		return true;
+	});
+
+	if (wroteAnalysis) return { ...ride, calorieAnalysis };
+	return await getRide(userId, ride.id) ?? ride;
 }
 
 function rideStoragePrefix(

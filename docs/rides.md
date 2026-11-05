@@ -12,6 +12,11 @@ The dashboard includes a compact latest-ride card with distance, duration, and
 elevation. It links to the latest saved summary or to Ride Logging when no ride
 has been saved.
 
+The Rides page also includes an understated Route Planner entry. The planner at
+`/rides/routes` creates, saves, edits, and exports road-cycling courses without
+mixing planned routes into recorded-ride history. See [`routes.md`](./routes.md)
+for routing, persistence, export, setup, and device-compatibility details.
+
 ## Parsing and normalization
 
 The existing `parseZwiftFit` parser uses the Garmin FIT SDK. The existing `analyzeGpx` parser reads GPX track points and derives distance, duration, speed, and elevation while retaining supported power, cadence, and heart-rate extensions. Both normalize into the shared `RideData` model before UI or persistence. `RideData.samples` is the canonical aligned timeline: elapsed seconds plus nullable power, speed in mph, cadence, elevation in feet, and cumulative distance in miles. Unit conversion happens during normalization.
@@ -25,6 +30,13 @@ Summary documents live at `users/{uid}/rides/{rideId}`. They contain owner UID, 
 Large `RideData` analysis/sample arrays are intentionally not stored in Firestore. A new ride with timeline data stores a versioned `samples.v1.json` sidecar in Storage beside its original file and adds the optional sidecar path to its summary document. This keeps list, calendar, dashboard, and weekly-history reads small while allowing a detail page to fetch one ride's samples. The version wrapper allows the representation to evolve without guessing its shape.
 
 The original file is stored at `users/{uid}/rides/{rideId}/original.fit` or `original.gpx`; detailed samples use `users/{uid}/rides/{rideId}/samples.v1.json`. Both upload before the summary document is created. If any save step fails, the client attempts to remove uploaded artifacts. Authenticated users can access only ride documents and files beneath their own UID. Local development uses the Firestore and Storage emulators.
+
+Ride summaries preserve source-reported `calories` and store computed provenance
+separately in `calorieAnalysis`. Manual FIT/GPX uploads, Wahoo imports, and
+explicit re-analysis all use the same pure estimator. Older summaries receive
+missing metadata once when opened, without rewriting an existing estimate. See
+[`rider-profile.md`](./rider-profile.md) for profile versioning, formulas,
+confidence, and fallback policies.
 
 ## Synchronized cursor and FIT export
 

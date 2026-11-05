@@ -1353,7 +1353,7 @@ type MapRouteProps = {
   /** Optional MapLibre layer id to insert the route layers before (z-order control). */
   beforeId?: string;
   /** Callback when the route line is clicked */
-  onClick?: () => void;
+  onClick?: (event: MapLibreGL.MapMouseEvent) => void;
   /** Callback when mouse enters the route line */
   onMouseEnter?: () => void;
   /** Callback when mouse leaves the route line */
@@ -1583,8 +1583,8 @@ function MapRoute({
   useEffect(() => {
     if (!isLoaded || !map || !interactive) return;
 
-    const handleClick = () => {
-      onClick?.();
+    const handleClick = (event: MapLibreGL.MapMouseEvent) => {
+      onClick?.(event);
     };
     const handleMouseEnter = () => {
       map.getCanvas().style.cursor = "pointer";

@@ -45,6 +45,8 @@ More detail lives in [`docs/`](docs/), especially the [product vision](docs/PROD
 npm run dev        # Start Next.js in development mode
 npm run emulators  # Start the Firebase Local Emulator Suite
 npm run lint       # Run ESLint
+npm run test       # Run unit tests
+npm run test:rules # Run Firebase route-ownership tests in temporary emulators
 npm run build      # Create a production build
 npm start          # Run the production build
 ```

@@ -4,6 +4,7 @@ import { getStorage } from "firebase-admin/storage";
 import { adminAuth } from "@/lib/firebase-admin";
 import { isFirebaseEmulatorEnvironment, localFirebaseProjectId } from "@/lib/firebase-environment";
 import { summaryFromRide } from "@/lib/rides/summary";
+import { getServerRiderProfile } from "@/lib/rider-profile/server";
 import type { ProcessedRide, StoredRideSamples } from "@/lib/rides/types";
 
 function rideDocument(uid: string, rideId: string) {
@@ -15,6 +16,7 @@ export async function hasWahooRide(uid: string, rideId: string) {
 }
 
 export async function saveWahooRide(uid: string, rideId: string, processed: ProcessedRide) {
+  const riderProfile = await getServerRiderProfile(uid);
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
     (isFirebaseEmulatorEnvironment ? `${localFirebaseProjectId}.firebasestorage.app` : undefined);
   const bucket = getStorage(adminAuth.app).bucket(bucketName);
@@ -56,7 +58,7 @@ export async function saveWahooRide(uid: string, rideId: string, processed: Proc
       source: ride.source,
       originalFilePath: original.name,
       sampleFilePath: samples?.name ?? null,
-      ...summaryFromRide(ride),
+      ...summaryFromRide(ride, riderProfile, activityDate),
     });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === 6) {

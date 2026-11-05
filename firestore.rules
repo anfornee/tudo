@@ -12,6 +12,112 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
 
+    match /users/{userId}/routes/{routeId} {
+      function validRoute() {
+        return request.resource.data.keys().hasOnly([
+            'userId', 'name', 'description', 'createdAt', 'updatedAt',
+            'routeFilePath', 'distanceMeters', 'durationSeconds',
+            'elevationGainMeters', 'elevationLossMeters', 'waypointCount',
+            'provider', 'profile', 'startLatitude', 'startLongitude'
+          ])
+          && request.resource.data.keys().hasAll([
+            'userId', 'name', 'description', 'createdAt', 'updatedAt',
+            'routeFilePath', 'distanceMeters', 'durationSeconds',
+            'elevationGainMeters', 'elevationLossMeters', 'waypointCount',
+            'provider', 'profile', 'startLatitude', 'startLongitude'
+          ])
+          && request.resource.data.userId == userId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 1000
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.routeFilePath is string
+          && request.resource.data.routeFilePath.matches('users/' + userId + '/routes/' + routeId + '/revisions/[^/]+[.]json')
+          && request.resource.data.distanceMeters is number
+          && request.resource.data.distanceMeters > 0
+          && (request.resource.data.durationSeconds == null
+            || (request.resource.data.durationSeconds is number
+              && request.resource.data.durationSeconds >= 0))
+          && (request.resource.data.elevationGainMeters == null
+            || (request.resource.data.elevationGainMeters is number
+              && request.resource.data.elevationGainMeters >= 0))
+          && (request.resource.data.elevationLossMeters == null
+            || (request.resource.data.elevationLossMeters is number
+              && request.resource.data.elevationLossMeters >= 0))
+          && request.resource.data.waypointCount is int
+          && request.resource.data.waypointCount >= 2
+          && request.resource.data.waypointCount <= 25
+          && request.resource.data.provider == 'openrouteservice'
+          && request.resource.data.profile == 'cycling-road'
+          && request.resource.data.startLatitude is number
+          && request.resource.data.startLatitude >= -90
+          && request.resource.data.startLatitude <= 90
+          && request.resource.data.startLongitude is number
+          && request.resource.data.startLongitude >= -180
+          && request.resource.data.startLongitude <= 180;
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && validRoute();
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && validRoute()
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /users/{userId}/riderProfiles/cycling {
+      function validRiderProfile() {
+        return request.resource.data.keys().hasOnly([
+            'version', 'preferredUnits', 'heightCm', 'dateOfBirth',
+            'physiologicalSex', 'restingHeartRateBpm', 'maxHeartRateBpm',
+            'weightHistory', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'version', 'preferredUnits', 'heightCm', 'dateOfBirth',
+            'physiologicalSex', 'restingHeartRateBpm', 'maxHeartRateBpm',
+            'weightHistory', 'updatedAt'
+          ])
+          && request.resource.data.version is int
+          && request.resource.data.version > 0
+          && request.resource.data.preferredUnits in ['imperial', 'metric']
+          && (request.resource.data.heightCm == null
+            || (request.resource.data.heightCm is number
+              && request.resource.data.heightCm >= 100
+              && request.resource.data.heightCm <= 250))
+          && (request.resource.data.dateOfBirth == null
+            || request.resource.data.dateOfBirth is string)
+          && (request.resource.data.physiologicalSex == null
+            || request.resource.data.physiologicalSex in ['female', 'male'])
+          && (request.resource.data.restingHeartRateBpm == null
+            || (request.resource.data.restingHeartRateBpm is number
+              && request.resource.data.restingHeartRateBpm >= 30
+              && request.resource.data.restingHeartRateBpm <= 120))
+          && (request.resource.data.maxHeartRateBpm == null
+            || (request.resource.data.maxHeartRateBpm is number
+              && request.resource.data.maxHeartRateBpm >= 100
+              && request.resource.data.maxHeartRateBpm <= 240))
+          && request.resource.data.weightHistory is list
+          && request.resource.data.weightHistory.size() <= 100
+          && request.resource.data.updatedAt is timestamp;
+      }
+
+      allow read, delete: if request.auth != null
+        && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && validRiderProfile()
+        && request.resource.data.version == 1;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && validRiderProfile()
+        && request.resource.data.version == resource.data.version + 1;
+    }
+
     // OAuth credentials are written and read only by the server through Firebase Admin.
     match /users/{userId}/privateIntegrations/{integrationId} {
       allow read, write: if false;
