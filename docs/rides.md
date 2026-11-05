@@ -63,40 +63,74 @@ The preserved source files for older rides can be reprocessed later to create sa
 
 ## Wahoo ride imports
 
-The personal Wahoo webhook maps one Wahoo account to one Tudo account. It accepts
-new `workout_summary` events at `POST /api/webhooks/wahoo`, downloads cycling FIT
-files from Wahoo's CDN, normalizes them through the same FIT import path as manual
-uploads, and saves them beneath the configured Tudo user.
+Tudo's Wahoo integration runs in the existing Next.js deployment. The OAuth
+start/callback Route Handlers and `POST /api/webhooks/wahoo` are Node.js Vercel
+Functions in production; Firebase remains the data and authentication layer, so
+this integration does not require Firebase Cloud Functions or a second backend.
+
+An authenticated user starts OAuth from the Rides page. Tudo requests only
+`user_read` and `offline_data`, exchanges the returned code on the server, and
+uses Wahoo's authenticated-user endpoint to associate the numeric Wahoo user ID
+with the current Firebase UID. New `workout_summary` events then resolve that
+private mapping, download cycling FIT files from Wahoo's CDN, normalize them
+through the same FIT import path as manual uploads, and save them beneath the
+associated Tudo user.
 
 ### Deployment configuration
 
-Set these server environment variables on the deployed Tudo app:
+Set these server environment variables in the Vercel project. Assign them to
+Production and to Preview only if preview deployments need to test Wahoo, then
+redeploy so the Functions receive the updated environment:
 
-- `WAHOO_WEBHOOK_TOKEN` is a random shared secret. Enter the same value in the
-  Wahoo developer portal's `webhook_token` setting.
-- `WAHOO_USER_ID` is the numeric Wahoo account ID. Use Wahoo's authenticated
-  user endpoint with the `user_read` scope to look it up.
-- `WAHOO_TUDO_UID` is the receiving account's Firebase Authentication UID.
+- `WAHOO_CLIENT_ID` is the Wahoo developer application's client ID.
+- `WAHOO_CLIENT_SECRET` is the confidential Wahoo application secret.
+- `WAHOO_WEBHOOK_TOKEN` is a random shared secret. Enter the same value in
+  Wahoo's `webhook_token` setting.
+- `WAHOO_REDIRECT_URI` is recommended in production and must exactly match the
+  redirect registered with Wahoo:
+  `https://<tudo-domain>/api/integrations/wahoo/callback`. If omitted, Tudo
+  derives it from the incoming request origin, which is useful locally but can
+  be ambiguous across Vercel preview domains.
 - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` must identify the Firebase Storage
   bucket used by the rest of the Rides module. The existing Firebase Admin
   project and credential variables must also be configured.
 
-Authorize the approved Wahoo developer app through Wahoo OAuth with
-`offline_data`; add `user_read` while looking up the account ID. Account
-authorization is done separately from this receiver. Once the receiver is
-deployed, set `webhook_enabled`, set `webhook_url` to
-`https://<tudo-domain>/api/webhooks/wahoo`, and configure the matching
-`webhook_token`. Use a new cycling activity to verify delivery. Wahoo retries
-non-200 responses after 30 minutes, 4 hours, 24 hours, and 72 hours, and may
-send duplicate events. See the [Wahoo Cloud API reference](https://cloud-api.wahooligan.com/#webhooks).
+Deploy the checked-in Firestore rule and collection-group index once with
+`firebase deploy --only firestore:rules,firestore:indexes`. This makes the
+private Wahoo-user lookup available to the Vercel webhook; it does not deploy a
+Firebase Function. The index configuration also prevents OAuth token fields
+from receiving unnecessary automatic indexes.
+
+Do not prefix the Wahoo variables with `NEXT_PUBLIC_`; the client secret,
+webhook token, access token, and refresh token must remain server-only. After
+deploying, set `webhook_enabled` in the Wahoo developer portal, set
+`webhook_url` to `https://<tudo-domain>/api/webhooks/wahoo`, configure the
+matching `webhook_token`, and use **Connect Wahoo** on the Rides page. Use a new
+cycling activity to verify delivery. Wahoo retries non-200 responses after 30
+minutes, 4 hours, 24 hours, and 72 hours, and may send duplicate events. See the
+[Wahoo Cloud API reference](https://cloud-api.wahooligan.com/#webhooks).
+
+`WAHOO_USER_ID` and `WAHOO_TUDO_UID` are no longer required for a newly
+authorized account. The receiver still accepts that pair as a legacy fallback
+so an existing manually configured deployment can migrate without an import
+interruption.
 
 ### Import and security behavior
 
-The route rejects an unconfigured receiver, invalid shared token, unexpected
-Wahoo user, non-cycling activity, oversized request or FIT file, and download
-URLs outside `https://cdn.wahooligan.com`. Wahoo workout IDs produce stable
-`wahoo-{workoutId}` ride IDs. Firestore's create operation provides the final
-duplicate guard when concurrent webhook deliveries race.
+OAuth uses a short-lived HttpOnly, SameSite state cookie bound to the initiating
+Firebase user. The Wahoo user ID and OAuth tokens are stored at
+`users/{uid}/privateIntegrations/wahoo`; Firestore client rules explicitly deny
+all reads and writes to this path. Only Firebase Admin in the Vercel Functions
+can access it. Refresh tokens are retained for future Wahoo API calls, but Tudo
+does not refresh them eagerly because Wahoo recommends refreshing immediately
+before an API request.
+
+The webhook rejects an unconfigured receiver, invalid shared token, non-cycling
+activity, oversized request or FIT file, and download URLs outside
+`https://cdn.wahooligan.com`. Events for Wahoo users without a Tudo mapping are
+acknowledged and ignored. Wahoo workout IDs produce stable `wahoo-{workoutId}`
+ride IDs. Firestore's create operation provides the final duplicate guard when
+concurrent webhook deliveries race.
 
 Wahoo imports store their original FIT and optional sample sidecar below
 `users/{uid}/rides/wahoo-{workoutId}/{deliveryId}/`; the summary document retains

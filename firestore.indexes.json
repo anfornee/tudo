@@ -1,0 +1,20 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "privateIntegrations",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "privateIntegrations",
+      "fieldPath": "wahooUserId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
+  ]
+}

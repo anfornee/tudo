@@ -1,8 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { MAX_RIDE_FILE_SIZE, processRideFile } from "@/lib/rides/import";
+import { resolveTudoUidForWahooUser } from "@/lib/rides/wahoo-connection";
 import { hasWahooRide, saveWahooRide } from "@/lib/rides/wahoo-persistence";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // Cycling workout IDs from Wahoo's Cloud API workout types.
 const cyclingTypes = new Set([0, 11, 12, 13, 14, 15, 16, 21, 49, 61, 64, 68, 70]);
@@ -55,10 +57,8 @@ interface WahooEvent {
 
 export async function POST(request: Request) {
   const token = process.env.WAHOO_WEBHOOK_TOKEN;
-  const wahooUserId = process.env.WAHOO_USER_ID;
-  const tudoUid = process.env.WAHOO_TUDO_UID;
 
-  if (!token || !wahooUserId || !tudoUid || tudoUid.includes("/")) {
+  if (!token) {
     return new Response(null, { status: 503 });
   }
 
@@ -76,11 +76,12 @@ export async function POST(request: Request) {
 
   const summary = event.workout_summary;
   const workout = summary?.workout;
+  const wahooUserId = event.user?.id;
   const workoutId = workout?.id;
   const fileUrl = summary?.file?.url;
   if (
     event.event_type !== "workout_summary" ||
-    String(event.user?.id) !== wahooUserId ||
+    typeof wahooUserId !== "number" || !Number.isSafeInteger(wahooUserId) || wahooUserId <= 0 ||
     typeof workout?.workout_type_id !== "number" ||
     !cyclingTypes.has(workout.workout_type_id) ||
     typeof fileUrl !== "string" ||
@@ -95,6 +96,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const tudoUid = await resolveTudoUidForWahooUser(wahooUserId);
+    if (!tudoUid) return new Response(null, { status: 200 });
     const rideId = `wahoo-${workoutId}`;
     if (!(await hasWahooRide(tudoUid, rideId))) {
       const download = await fetch(url, {
