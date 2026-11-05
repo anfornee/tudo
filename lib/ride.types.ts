@@ -1,8 +1,13 @@
 export interface RideSample {
 	elapsedSeconds: number;
+	timestampMs?: number | null;
+	latitude?: number | null;
+	longitude?: number | null;
 	power: number | null;
 	speedMph: number | null;
 	cadence: number | null;
+	heartRate?: number | null;
+	temperatureC?: number | null;
 	elevationFeet: number | null;
 	distanceMiles: number | null;
 }

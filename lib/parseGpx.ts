@@ -498,9 +498,13 @@ export function analyzeGpx(
 
 		return [{
 			elapsedSeconds,
+			timestampMs: point.timestamp.getTime(),
+			latitude: point.latitude,
+			longitude: point.longitude,
 			power: point.power ?? null,
 			speedMph,
 			cadence: point.cadence ?? null,
+			heartRate: point.heartRate ?? null,
 			elevationFeet: point.elevation === undefined ? null : point.elevation * 3.28084,
 			distanceMiles: cumulativeDistanceMeters / 1609.344,
 		}];

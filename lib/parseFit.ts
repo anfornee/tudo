@@ -8,8 +8,12 @@ import type { RideData, RideSample } from "./ride.types";
 
 interface FitRecordSample {
   timestamp: Date;
+	latitude: number | null;
+	longitude: number | null;
   power: number | null;
   cadence: number | null;
+	heartRate: number | null;
+	temperatureC: number | null;
   speed: number | null;
   elevation: number | null;
   distance: number | null;
@@ -49,8 +53,12 @@ export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
   const recordsWithTimestamps: FitRecordSample[] = records
     .map((record) => ({
       timestamp: record.timestamp,
+		latitude: Number.isFinite(record.positionLat) && record.positionLat !== 0x7fffffff ? record.positionLat! * (180 / 2 ** 31) : null,
+		longitude: Number.isFinite(record.positionLong) && record.positionLong !== 0x7fffffff ? record.positionLong! * (180 / 2 ** 31) : null,
       power: Number.isFinite(record.power) ? record.power : null,
       cadence: Number.isFinite(record.cadence) ? record.cadence : null,
+		heartRate: Number.isFinite(record.heartRate) ? record.heartRate : null,
+		temperatureC: Number.isFinite(record.temperature) ? record.temperature : null,
       speed: Number.isFinite(record.speed) ? record.speed : null,
       elevation: Number.isFinite(record.enhancedAltitude)
         ? record.enhancedAltitude
@@ -75,9 +83,14 @@ export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
   const firstTimestamp = timestamps[0]?.getTime() ?? 0;
   const samples: RideSample[] = recordsWithTimestamps.map((sample) => ({
     elapsedSeconds: Math.max(0, (sample.timestamp.getTime() - firstTimestamp) / 1000),
+	timestampMs: sample.timestamp.getTime(),
+	latitude: sample.latitude,
+	longitude: sample.longitude,
     power: sample.power,
     speedMph: sample.speed === null ? null : sample.speed * 2.236936,
     cadence: sample.cadence,
+	heartRate: sample.heartRate,
+	temperatureC: sample.temperatureC,
     elevationFeet: sample.elevation === null ? null : sample.elevation * 3.28084,
     distanceMiles: sample.distance === null ? null : sample.distance / 1609.344,
   }));

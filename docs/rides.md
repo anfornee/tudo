@@ -26,6 +26,32 @@ Large `RideData` analysis/sample arrays are intentionally not stored in Firestor
 
 The original file is stored at `users/{uid}/rides/{rideId}/original.fit` or `original.gpx`; detailed samples use `users/{uid}/rides/{rideId}/samples.v1.json`. Both upload before the summary document is created. If any save step fails, the client attempts to remove uploaded artifacts. Authenticated users can access only ride documents and files beneath their own UID. Local development uses the Firestore and Storage emulators.
 
+## Synchronized cursor and FIT export
+
+Ride detail charts and the route map share one transient `RideCursor`. Charts
+resolve pointer positions against the canonical sample array (with cached
+timestamp/distance lookup tables), while the map uses a small spatial hash for
+GPS samples. A user interaction updates the cursor once; charts and the map
+only render the resulting position, which avoids feedback loops. Older sample
+sidecars remain readable, but because they predate GPS metadata their map and
+charts cannot be synchronized until the ride is re-analyzed.
+
+New normalized samples retain optional timestamp, latitude, longitude, heart
+rate, and temperature fields. Null or unavailable sensor fields stay absent or
+null and are not invented during export.
+
+`Export FIT` downloads the retained original bytes for imported FIT rides. For
+GPX rides it uses the already-installed `@garmin/fitsdk` encoder to create a
+FIT file containing file, session, lap, activity, and record messages. Values
+are converted to FIT units (semicircles, meters, meters/second, feet/meters)
+and optional record fields are emitted only when present. Export is entirely
+local; no activity data is uploaded to a conversion service.
+
+Known limitations: generated FIT activity names are currently not represented
+by the FIT profile's standard activity messages, and rides without detailed
+samples cannot generate a new FIT file. Original FIT downloads retain all
+source fields exactly.
+
 ## History conventions
 
 Calendar grouping uses local calendar dates rather than UTC date strings. Weeks start on Monday throughout aggregation, charts, and streak calculations. A successful week has at least one ride. If the current week has a ride it extends the current streak; if it does not yet, the streak is measured backward from the previous week so an unfinished week does not prematurely break it. The longest streak is the longest sequence of occupied Monday-based weeks.

@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { getOriginalRideFile } from "@/lib/rides/source";
 import type { RideRoute } from "@/lib/rides/route";
+import type { RideSample } from "@/lib/ride.types";
+import type { RideCursor } from "@/lib/rides/cursor";
 import type { SavedRide } from "@/lib/rides/types";
 
 const RideRouteMap = dynamic(() => import("./RideRouteMap"), {
@@ -11,7 +13,7 @@ const RideRouteMap = dynamic(() => import("./RideRouteMap"), {
   loading: () => <p role="status" className="text-sm text-muted-foreground">Loading map...</p>,
 });
 
-export function RideRouteSection({ ride }: { ride: SavedRide }) {
+export function RideRouteSection({ ride, samples, cursor, onCursorChange }: { ride: SavedRide; samples: RideSample[] | null; cursor: RideCursor | null; onCursorChange: (cursor: RideCursor | null) => void }) {
   const [result, setResult] = useState<RideRoute>([]);
   const { id, originalFilePath, originalFileName, source } = ride;
 
@@ -42,7 +44,7 @@ export function RideRouteSection({ ride }: { ride: SavedRide }) {
   return (
     <section aria-labelledby="ride-route-heading" className="space-y-3 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
       <h2 id="ride-route-heading" className="text-lg font-semibold">Ride route</h2>
-      <RideRouteMap segments={result} />
+      <RideRouteMap segments={result} samples={samples} cursor={cursor} onCursorChange={onCursorChange} />
     </section>
   );
 }

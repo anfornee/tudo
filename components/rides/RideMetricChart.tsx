@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { RideSample } from "@/lib/ride.types";
+import { cursorFromSample, nearestRideSampleIndex, type RideCursor } from "@/lib/rides/cursor";
 import { formatRideDistance, formatRideElapsedTime } from "@/lib/rides/formatters";
 import { deriveRideMetricDomain, downsampleRideSamples, type RideMetricDomainMode, type RideSampleMetric } from "@/lib/rides/samples";
 
@@ -18,16 +19,17 @@ interface RideMetricChartProps {
   decimals?: number;
   domainMode?: RideMetricDomainMode;
   xAxis?: "elapsed-time" | "distance";
+  cursor: RideCursor | null;
+  onCursorChange: (cursor: RideCursor | null) => void;
 }
 
-export function RideMetricChart({ title, samples, metric, unit, decimals = 0, domainMode = "zero-based", xAxis = "elapsed-time" }: RideMetricChartProps) {
+export function RideMetricChart({ title, samples, metric, unit, decimals = 0, domainMode = "zero-based", xAxis = "elapsed-time", cursor, onCursorChange }: RideMetricChartProps) {
   const data = useMemo(() => {
     const eligibleSamples = xAxis === "distance"
       ? samples.filter((sample) => sample.distanceMiles !== null && Number.isFinite(sample.distanceMiles))
       : samples;
     return downsampleRideSamples(eligibleSamples, metric);
   }, [metric, samples, xAxis]);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (!data.length) {
     return (
       <article className="rounded-xl border bg-background p-4">
@@ -48,11 +50,21 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
   const x = (value: number) => PADDING.left + value / xMaximum * (WIDTH - PADDING.left - PADDING.right);
   const y = (value: number) => PADDING.top + (yMaximum - value) / (yMaximum - yMinimum) * (HEIGHT - PADDING.top - PADDING.bottom);
   const path = data.map((sample, index) => `${index ? "L" : "M"}${x(xValue(sample)).toFixed(1)},${y(sample[metric]!).toFixed(1)}`).join(" ");
-  const active = activeIndex === null ? null : data[activeIndex];
+  const activeSourceIndex = cursor ? nearestRideSampleIndex(samples, xAxis === "distance" ? (cursor.distanceMiles ?? 0) : (cursor.timestampMs == null ? samples[cursor.sampleIndex]?.elapsedSeconds ?? 0 : samples[cursor.sampleIndex]?.elapsedSeconds ?? 0), xAxis === "distance" ? "distanceMiles" : "elapsedSeconds") : null;
+  const active = activeSourceIndex === null ? null : data.reduce<RideSample | null>((nearest, sample) => {
+    if (!nearest) return sample;
+    return Math.abs(sample.elapsedSeconds - samples[activeSourceIndex].elapsedSeconds) < Math.abs(nearest.elapsedSeconds - samples[activeSourceIndex].elapsedSeconds) ? sample : nearest;
+  }, null);
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   const formatValue = (value: number) => `${value.toFixed(decimals)} ${unit}`;
   const formatXAxisValue = (value: number) => xAxis === "distance" ? formatRideDistance(value) : formatRideElapsedTime(value);
   const xAxisDescription = xAxis === "distance" ? "distance" : "elapsed ride time";
+
+  function moveWithKeyboard(direction: 1 | -1) {
+    const current = cursor?.sampleIndex ?? samples.indexOf(data[0]);
+    const next = Math.max(0, Math.min(samples.length - 1, current + direction));
+    onCursorChange(cursorFromSample(samples[next], next));
+  }
 
   function selectNearest(clientX: number, bounds: DOMRect) {
     const selectedValue = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)) * xMaximum;
@@ -60,7 +72,9 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
     for (let index = 1; index < data.length; index += 1) {
       if (Math.abs(xValue(data[index]) - selectedValue) < Math.abs(xValue(data[nearest]) - selectedValue)) nearest = index;
     }
-    setActiveIndex(nearest);
+    const sample = data[nearest];
+    const sampleIndex = samples.indexOf(sample);
+    if (sampleIndex >= 0) onCursorChange(cursorFromSample(sample, sampleIndex));
   }
 
   return (
@@ -74,9 +88,21 @@ export function RideMetricChart({ title, samples, metric, unit, decimals = 0, do
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className="h-auto w-full touch-pan-y"
           role="img"
+		  tabIndex={0}
           aria-label={`${title} over ${xAxisDescription}. Minimum ${formatValue(minimum)}, average ${formatValue(average)}, maximum ${formatValue(maximum)}.`}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+              event.preventDefault();
+              moveWithKeyboard(-1);
+            } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+              event.preventDefault();
+              moveWithKeyboard(1);
+            } else if (event.key === "Escape") {
+              onCursorChange(null);
+            }
+          }}
           onPointerMove={(event) => selectNearest(event.clientX, event.currentTarget.getBoundingClientRect())}
-          onPointerLeave={() => setActiveIndex(null)}
+          onPointerLeave={() => onCursorChange(null)}
         >
           {[0, 0.5, 1].map((position) => {
             const gridY = PADDING.top + position * (HEIGHT - PADDING.top - PADDING.bottom);

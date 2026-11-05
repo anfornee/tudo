@@ -1358,6 +1358,7 @@ type MapRouteProps = {
   onMouseEnter?: () => void;
   /** Callback when mouse leaves the route line */
   onMouseLeave?: () => void;
+  onMouseMove?: (event: MapLibreGL.MapMouseEvent) => void;
   /** Whether the route is interactive - shows pointer cursor on hover (default: true) */
   interactive?: boolean;
   /** Route subcomponents (RouteProgress, RouteMarker) */
@@ -1381,6 +1382,7 @@ function MapRoute({
   onClick,
   onMouseEnter,
   onMouseLeave,
+  onMouseMove,
   interactive = true,
   children,
 }: MapRouteProps) {
@@ -1572,15 +1574,18 @@ function MapRoute({
       map.getCanvas().style.cursor = "";
       onMouseLeave?.();
     };
+    const handleMouseMove = (event: MapLibreGL.MapMouseEvent) => onMouseMove?.(event);
 
     map.on("click", layerId, handleClick);
     map.on("mouseenter", layerId, handleMouseEnter);
     map.on("mouseleave", layerId, handleMouseLeave);
+    map.on("mousemove", layerId, handleMouseMove);
 
     return () => {
       map.off("click", layerId, handleClick);
       map.off("mouseenter", layerId, handleMouseEnter);
       map.off("mouseleave", layerId, handleMouseLeave);
+      map.off("mousemove", layerId, handleMouseMove);
     };
   }, [
     isLoaded,
@@ -1589,6 +1594,7 @@ function MapRoute({
     onClick,
     onMouseEnter,
     onMouseLeave,
+    onMouseMove,
     interactive,
   ]);
 

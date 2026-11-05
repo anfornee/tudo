@@ -1,8 +1,10 @@
 "use client";
 
-import { Component, type ReactNode } from "react";
+import { Component, useMemo, type ReactNode } from "react";
 import type { LngLatBoundsLike } from "maplibre-gl";
-import { Map, MapControls, MapRoute } from "@/components/ui/map";
+import { Map, MapControls, MapMarker, MapRoute, MarkerContent } from "@/components/ui/map";
+import type { RideSample } from "@/lib/ride.types";
+import { createRouteSampleResolver, cursorFromSample, type RideCursor } from "@/lib/rides/cursor";
 import type { RideRoute } from "@/lib/rides/route";
 
 function getMapGeometry(segments: RideRoute) {
@@ -42,8 +44,9 @@ class MapErrorBoundary extends Component<{ children: ReactNode }, { failed: bool
   }
 }
 
-export default function RideRouteMap({ segments }: { segments: RideRoute }) {
+export default function RideRouteMap({ segments, samples, cursor, onCursorChange }: { segments: RideRoute; samples: RideSample[] | null; cursor: RideCursor | null; onCursorChange: (cursor: RideCursor | null) => void }) {
   const { lines, bounds } = getMapGeometry(segments);
+  const resolveRouteSample = useMemo(() => samples ? createRouteSampleResolver(samples) : null, [samples]);
 
   return (
     <MapErrorBoundary>
@@ -57,9 +60,19 @@ export default function RideRouteMap({ segments }: { segments: RideRoute }) {
               color="#e44d2e"
               width={4}
               opacity={1}
-              interactive={false}
+              interactive={Boolean(samples?.some((sample) => sample.latitude != null && sample.longitude != null))}
+              onMouseMove={(event) => {
+                if (!samples) return;
+                const sampleIndex = resolveRouteSample?.(event.lngLat.lng, event.lngLat.lat);
+                if (sampleIndex != null) onCursorChange(cursorFromSample(samples[sampleIndex], sampleIndex));
+              }}
             />
           ))}
+          {(() => {
+            const sample = cursor && samples?.[cursor.sampleIndex];
+            if (!sample || sample.latitude == null || sample.longitude == null) return null;
+            return <MapMarker longitude={sample.longitude} latitude={sample.latitude} anchor="center"><MarkerContent><div className="size-4 rounded-full border-2 border-white bg-primary shadow-lg" /></MarkerContent></MapMarker>;
+          })()}
         </Map>
       </div>
     </MapErrorBoundary>

@@ -3,6 +3,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import {
 	ArrowLeft,
+	Download,
 	Loader2,
 	RefreshCw,
 	Trash2,
@@ -19,12 +20,15 @@ import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
 import type { RideSample } from "@/lib/ride.types";
+import { type RideCursor } from "@/lib/rides/cursor";
 import {
 	deleteRide,
 	getRide,
 	getRideSamples,
 } from "@/lib/rides/persistence";
 import { reanalyzeRide } from "@/lib/rides/reanalysis";
+import { downloadRideFile, encodeRideSamplesAsFit } from "@/lib/rides/export";
+import { getOriginalRideFile } from "@/lib/rides/source";
 import type { SavedRide } from "@/lib/rides/types";
 
 interface SavedRideContentProps {
@@ -44,12 +48,14 @@ export function SavedRideContent({
 
 	const [samplesLoading, setSamplesLoading] =
 		useState(false);
+	const [cursor, setCursor] = useState<RideCursor | null>(null);
 
 	const [reanalyzing, setReanalyzing] =
 		useState(false);
 
 	const [deleting, setDeleting] =
 		useState(false);
+	const [exporting, setExporting] = useState(false);
 
 	const [showReanalyzeDialog, setShowReanalyzeDialog] =
 		useState(false);
@@ -231,6 +237,29 @@ export function SavedRideContent({
 		}
 	}
 
+	async function handleExportFit() {
+		if (!ride || exporting || reanalyzing || deleting) return;
+		setExporting(true);
+		setError(null);
+		try {
+			const date = ride.activityDate?.toDate() ?? ride.importedAt?.toDate() ?? new Date();
+			const filenameDate = date.toISOString().slice(0, 10);
+			if (ride.source === "fit") {
+				const original = await getOriginalRideFile(ride);
+				downloadRideFile(await original.arrayBuffer(), `tudo-ride-${filenameDate}.fit`);
+			} else {
+				if (!samples?.length) throw new Error("Detailed ride samples are required to generate a FIT export.");
+				const bytes = encodeRideSamplesAsFit(samples, date, ride.originalFileName);
+				downloadRideFile(bytes, `tudo-ride-${filenameDate}.fit`);
+			}
+			setMessage("FIT activity exported.");
+		} catch (exportError) {
+			setError(exportError instanceof Error ? exportError.message : "Unable to export this ride as FIT.");
+		} finally {
+			setExporting(false);
+		}
+	}
+
 	if (loading) {
 		return (
 			<div className="flex min-h-48 items-center justify-center rounded-xl border bg-card">
@@ -261,6 +290,17 @@ export function SavedRideContent({
 					</Link>
 
 					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							type="button"
+								variant="outline"
+								size="sm"
+								disabled={reanalyzing || deleting || exporting || (ride.source !== "fit" && !samples?.length)}
+								onClick={() => void handleExportFit()}
+								title={ride.source === "fit" ? "Download the original FIT activity" : "Export this ride as a FIT activity"}
+							>
+								{exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+								{exporting ? "Exporting…" : "Export FIT"}
+							</Button>
 						<Button
 							type="button"
 							variant="outline"
@@ -346,14 +386,14 @@ export function SavedRideContent({
 				/>
 			</section>
 
-			<RideRouteSection key={ride.originalFilePath || ride.id} ride={ride} />
+			<RideRouteSection key={ride.originalFilePath || ride.id} ride={ride} samples={samples} cursor={cursor} onCursorChange={setCursor} />
 
 			{samplesLoading ? (
 				<div className="flex min-h-40 items-center justify-center rounded-xl border bg-card">
 					<Loader2 className="size-5 animate-spin text-muted-foreground" />
 				</div>
 			) : (
-				<RideCharts samples={samples} />
+				<RideCharts samples={samples} cursor={cursor} onCursorChange={setCursor} />
 			)}
 
 			<ReanalyzeRideDialog

@@ -1,7 +1,8 @@
 import type { RideSample } from "@/lib/ride.types";
+import type { RideCursor } from "@/lib/rides/cursor";
 import { RideMetricChart } from "@/components/rides/RideMetricChart";
 
-export function RideCharts({ samples }: { samples: RideSample[] | null }) {
+export function RideCharts({ samples, cursor, onCursorChange }: { samples: RideSample[] | null; cursor: RideCursor | null; onCursorChange: (cursor: RideCursor | null) => void }) {
   return (
     <section className="space-y-4">
       <div>
@@ -15,10 +16,10 @@ export function RideCharts({ samples }: { samples: RideSample[] | null }) {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          <RideMetricChart title="Power" samples={samples} metric="power" unit="W" />
-          <RideMetricChart title="Speed" samples={samples} metric="speedMph" unit="mph" decimals={1} />
-          <RideMetricChart title="Cadence" samples={samples} metric="cadence" unit="rpm" />
-          <RideMetricChart title="Elevation" samples={samples} metric="elevationFeet" unit="ft" domainMode="padded" xAxis="distance" />
+          <RideMetricChart title="Power" samples={samples} metric="power" unit="W" cursor={cursor} onCursorChange={onCursorChange} />
+          <RideMetricChart title="Speed" samples={samples} metric="speedMph" unit="mph" decimals={1} cursor={cursor} onCursorChange={onCursorChange} />
+          <RideMetricChart title="Cadence" samples={samples} metric="cadence" unit="rpm" cursor={cursor} onCursorChange={onCursorChange} />
+          <RideMetricChart title="Elevation" samples={samples} metric="elevationFeet" unit="ft" domainMode="padded" xAxis="distance" cursor={cursor} onCursorChange={onCursorChange} />
         </div>
       )}
     </section>

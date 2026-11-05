@@ -102,14 +102,19 @@ function isRideSample(
 		typeof sample.elapsedSeconds === "number" &&
 		Number.isFinite(sample.elapsedSeconds) &&
 		[
+			"timestampMs",
+			"latitude",
+			"longitude",
 			"power",
 			"speedMph",
 			"cadence",
+			"heartRate",
+			"temperatureC",
 			"elevationFeet",
 			"distanceMiles",
 		].every(
 			(key) =>
-				sample[key] === null ||
+				 sample[key] == null ||
 				(
 					typeof sample[key] === "number" &&
 					Number.isFinite(sample[key])
