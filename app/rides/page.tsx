@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 
 import { RidesPageContent } from "@/components/rides/RidesPageContent";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { getWahooConnectionStatus } from "@/lib/rides/wahoo-connection";
 
 const wahooMessages: Record<string, { text: string; tone: string }> = {
   connected: { text: "Wahoo connected. New cycling activities will import automatically.", tone: "border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300" },
@@ -17,6 +19,7 @@ const wahooMessages: Record<string, { text: string; tone: string }> = {
 export default async function RidesPage({ searchParams }: { searchParams: Promise<{ wahoo?: string | string[] }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/api/auth/logout");
+  const wahoo = await getWahooConnectionStatus(user.uid);
   const wahooResult = (await searchParams).wahoo;
   const message = typeof wahooResult === "string" ? wahooMessages[wahooResult] : undefined;
 
@@ -27,9 +30,16 @@ export default async function RidesPage({ searchParams }: { searchParams: Promis
           <h1 className="text-2xl font-semibold tracking-tight">Rides</h1>
           <p className="mt-1 text-sm text-muted-foreground">Import and keep your cycling activity history.</p>
         </div>
-        <Link className={buttonVariants({ variant: "outline" })} href="/api/integrations/wahoo/connect">
-          Connect Wahoo
-        </Link>
+        {wahoo.connected ? (
+          <span className={buttonVariants({ variant: "outline" })} aria-label="Wahoo account connected">
+            <CheckCircle2 className="text-green-600 dark:text-green-400" />
+            Wahoo connected
+          </span>
+        ) : (
+          <Link className={buttonVariants({ variant: "outline" })} href="/api/integrations/wahoo/connect">
+            Connect Wahoo
+          </Link>
+        )}
       </div>
       {message ? <p role="status" className={`rounded-xl border px-4 py-3 text-sm ${message.tone}`}>{message.text}</p> : null}
       <RidesPageContent userId={user.uid} />

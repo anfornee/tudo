@@ -80,8 +80,9 @@ start/callback Route Handlers and `POST /api/webhooks/wahoo` are Node.js Vercel
 Functions in production; Firebase remains the data and authentication layer, so
 this integration does not require Firebase Cloud Functions or a second backend.
 
-An authenticated user starts OAuth from the Rides page. Tudo requests only
-`user_read` and `offline_data`, exchanges the returned code on the server, and
+An authenticated user starts OAuth from the Rides page. Tudo requests
+`user_read`, `offline_data`, and `routes_write`, exchanges the returned code on
+the server, and
 uses Wahoo's authenticated-user endpoint to associate the numeric Wahoo user ID
 with the current Firebase UID. New `workout_summary` events then resolve that
 private mapping, download cycling FIT files from Wahoo's CDN, normalize them
@@ -133,9 +134,10 @@ OAuth uses a short-lived HttpOnly, SameSite state cookie bound to the initiating
 Firebase user. The Wahoo user ID and OAuth tokens are stored at
 `users/{uid}/privateIntegrations/wahoo`; Firestore client rules explicitly deny
 all reads and writes to this path. Only Firebase Admin in the Vercel Functions
-can access it. Refresh tokens are retained for future Wahoo API calls, but Tudo
-does not refresh them eagerly because Wahoo recommends refreshing immediately
-before an API request.
+can access it. The Rides page derives only a boolean connection status on the
+server; OAuth credentials are never passed to a client component. Tudo refreshes
+an expired access token only immediately before a Wahoo API request and stores
+the rotated access and refresh tokens server-side.
 
 The webhook rejects an unconfigured receiver, invalid shared token, non-cycling
 activity, oversized request or FIT file, and download URLs outside

@@ -6,8 +6,13 @@ The Rides page links to `/rides/routes`, where an authenticated user can create
 and manage road-cycling routes. Click the map to add a start and destination,
 then add more waypoints, drag markers, or click the calculated route line to
 insert a shaping waypoint. Waypoint-list controls provide a keyboard-accessible
-alternative to dragging. Undo, redo, fit, remove, and confirmed clear actions
-operate on the same authoritative waypoint history.
+alternative to dragging. Adding or recalculating waypoints preserves the current
+map position; fitting the route is an explicit action. Undo, redo, fit, remove,
+and confirmed clear actions operate on the same authoritative waypoint history.
+The Return to start action can append either a bounded set of reverse shaping
+points from the calculated outbound geometry for an out-and-back route or only
+the starting point so the provider chooses the best road-cycling route back.
+Both are represented as ordinary, undoable waypoint edits.
 
 The editor shows distance, provider-estimated duration, elevation gain/loss,
 an elevation profile, and a collapsible maneuver list when the provider supplies
@@ -31,10 +36,10 @@ dependency.
 The browser sends normalized waypoint IDs/coordinates and preferences to
 `POST /api/routes/directions`. The existing Next.js/Vercel backend authenticates
 the session, applies input and request-size limits, and calls openrouteservice's
-GeoJSON endpoint with the `cycling-road` profile. The private key never reaches a
-client bundle. Requests time out after 20 seconds. Client calculations are
-debounced and aborted when superseded, and a monotonic request ID prevents stale
-responses from winning a race.
+GeoJSON endpoint on `api.heigit.org` with the `cycling-road` profile. The private
+key never reaches a client bundle. Requests time out after 20 seconds. Client
+calculations are debounced and aborted when superseded, and a monotonic request
+ID prevents stale responses from winning a race.
 
 `lib/routes/openrouteservice.ts` is the provider boundary. It converts provider
 geometry, waypoint indices, summaries, elevation, and numeric instruction types
@@ -84,6 +89,12 @@ away from Firestore's document-size limit. Firestore and Storage rules both scop
 routes below the authenticated UID. No composite Firestore index or migration is
 required.
 
+Saved route names are unique per Tudo user after Unicode normalization,
+whitespace folding, and case folding. Create and update operations enforce that
+rule before uploading a revision. Wahoo publishing repeats the check against
+Firestore and reloads the saved Storage sidecar, so unsaved editor state or
+client-supplied geometry cannot be published.
+
 ## Exports
 
 GPX export emits a GPX 1.1 track with ordered coordinates, available elevations,
@@ -102,23 +113,29 @@ Wahoo documents reliable v1 turn-by-turn around its Take Me To flow and embedded
 cues from RideWithGPS or Komoot. Tudo therefore does not claim BOLT v1 cue
 compatibility until a generated file is tested on real hardware.
 
-FIT course export is intentionally deferred. A course requires FIT `course`,
-`record`, `lap`, and `course_point` semantics and cannot reuse Tudo's FIT activity
-encoder as though it were a route.
+Wahoo publishing uses the existing `@garmin/fitsdk` dependency to generate a FIT
+course containing file ID, course, lap, timer event, record, and course-point
+messages. Geometry records preserve route distance, position, and available
+elevation. Provider maneuvers become FIT course points; missing elevation is not
+invented. This encoder remains separate from Tudo's FIT activity encoder because
+activity and course files have different required semantics.
 
-## Wahoo Cloud future path
+## Wahoo Cloud publishing
 
-Wahoo's Cloud API currently supports `POST /v1/routes` with `routes_write`. It
-requires a base64 FIT course plus a stable external ID, provider update timestamp,
-route metadata, start coordinate, distance, and ascent. Tudo's route ID,
-normalized route model, timestamps, and provider metadata are suitable inputs for
-that future adapter.
+The editor enables **Send to Wahoo** only for a saved route with no unsaved
+changes. `POST /api/integrations/wahoo/routes` authenticates the Tudo session,
+reloads the UID-owned summary and sidecar, generates the FIT course, and calls
+Wahoo's Cloud Routes API entirely from the existing Vercel backend. A stable
+`tudo-route-{routeId}` external ID is used for creation. The returned Wahoo ID is
+kept in a server-only `users/{uid}/privateRouteIntegrations/{routeId}` document,
+allowing later sends to update the same route without exposing integration state.
 
-Publishing is not part of this MVP. The existing OAuth connection requests only
-`user_read` and `offline_data`; adding `routes_write` requires an intentional
-re-authorization flow, FIT course encoding, create/update reconciliation, and
-device testing. Wahoo also notes Cloud API routes sync to the Wahoo app and ELEMNT
-computer but not the legacy ELEMNT app.
+OAuth requests `user_read`, `offline_data`, and `routes_write`. Existing
+connections that already granted `routes_write` work without reconnecting;
+otherwise Wahoo returns a permission error and the user must reconnect. Access
+tokens are refreshed only when expired and immediately before publishing.
+Secrets and generated FIT bytes never enter the browser. Wahoo notes Cloud API
+routes sync to the Wahoo app and ELEMNT computer but not the legacy ELEMNT app.
 
 ## Verification and manual checks
 
@@ -136,6 +153,8 @@ Manual deployment checks still required:
 5. Import representative GPX and TCX exports into the intended navigation apps.
 6. Test experimental TCX cues on an original ELEMNT BOLT before making any
    compatibility claim.
+7. Send a saved route to a sandbox Wahoo account, sync a physical ELEMNT, then
+   edit, save, and resend it to verify create/update reconciliation.
 
 ## Primary references
 

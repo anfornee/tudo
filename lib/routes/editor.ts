@@ -1,4 +1,4 @@
-import type { RouteWaypoint } from "./types.ts";
+import type { RouteGeometryPoint, RouteWaypoint } from "./types.ts";
 
 export interface WaypointHistory {
   past: RouteWaypoint[][];
@@ -53,6 +53,59 @@ export function removeWaypoint(waypoints: readonly RouteWaypoint[], index: numbe
 
 export function insertWaypoint(waypoints: readonly RouteWaypoint[], index: number, waypoint: RouteWaypoint) {
   return [...waypoints.slice(0, index), waypoint, ...waypoints.slice(index)];
+}
+
+export type ReturnToStartMode = "out-and-back" | "best-route";
+
+export interface ReturnToStartOptions {
+  maximumWaypoints?: number;
+  outboundGeometry?: readonly RouteGeometryPoint[];
+}
+
+export function routeReturnsToStart(waypoints: readonly RouteWaypoint[]) {
+  if (waypoints.length < 2) return false;
+  const start = waypoints[0].coordinate;
+  const end = waypoints.at(-1)?.coordinate;
+  return end?.[0] === start[0] && end[1] === start[1];
+}
+
+export function addReturnToStart(
+  waypoints: readonly RouteWaypoint[],
+  mode: ReturnToStartMode,
+  createId: () => string,
+  options: ReturnToStartOptions = {},
+) {
+  if (waypoints.length < 2 || routeReturnsToStart(waypoints)) return [...waypoints];
+  const maximumWaypoints = options.maximumWaypoints ?? 25;
+  const availableReturnPoints = maximumWaypoints - waypoints.length;
+  const outboundGeometry = options.outboundGeometry ?? [];
+  const intermediateBudget = Math.max(0, availableReturnPoints - 1);
+  const intermediateCount = Math.min(10, intermediateBudget, Math.max(0, outboundGeometry.length - 2));
+  const geometryReturnPoints = Array.from({ length: intermediateCount }, (_, index) => {
+    const geometryIndex = Math.round(
+      (outboundGeometry.length - 1) * (intermediateCount - index) / (intermediateCount + 1),
+    );
+    return outboundGeometry[geometryIndex];
+  });
+  const returnPoints = mode === "out-and-back" && geometryReturnPoints.length
+    ? [...geometryReturnPoints.map((point) => ({ coordinate: point.coordinate })), waypoints[0]]
+    : mode === "out-and-back"
+      ? waypoints.slice(0, -1).reverse()
+      : [waypoints[0]];
+  if (waypoints.length + returnPoints.length > maximumWaypoints) {
+    throw new RangeError(
+      mode === "out-and-back"
+        ? `Out and back needs ${returnPoints.length} more waypoints. Remove some waypoints or choose Best route back.`
+        : "This route already uses the maximum number of waypoints.",
+    );
+  }
+  return [
+    ...waypoints,
+    ...returnPoints.map((waypoint) => ({
+      id: createId(),
+      coordinate: [...waypoint.coordinate] as RouteWaypoint["coordinate"],
+    })),
+  ];
 }
 
 export function shouldAcceptRoutingResponse(activeRequest: number, responseRequest: number) {

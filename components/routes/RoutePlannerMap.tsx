@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, useEffect, useMemo, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { LngLatBoundsLike, MapMouseEvent } from "maplibre-gl";
 import {
   Map,
@@ -45,20 +45,26 @@ function MapClickHandler({ onClick }: { onClick: (coordinate: RouteCoordinate) =
 
 function FitRoute({ route, waypoints, fitToken }: { route: PlannedRoute | null; waypoints: RouteWaypoint[]; fitToken: number }) {
   const { map } = useMap();
+  const coordinates = useMemo(
+    () => route?.geometry.map((point) => point.coordinate) ?? waypoints.map((point) => point.coordinate),
+    [route, waypoints],
+  );
+  const coordinatesRef = useRef(coordinates);
   useEffect(() => {
-    if (!map || (!route && !waypoints.length)) return;
-    const coordinates = route?.geometry.map((point) => point.coordinate) ?? waypoints.map((point) => point.coordinate);
-    if (!coordinates.length) return;
-    const bounds = coordinates.reduce(
+    coordinatesRef.current = coordinates;
+  }, [coordinates]);
+  useEffect(() => {
+    if (!map || !coordinatesRef.current.length) return;
+    const bounds = coordinatesRef.current.reduce(
       (current, coordinate) => [
         [Math.min(current[0][0], coordinate[0]), Math.min(current[0][1], coordinate[1])],
         [Math.max(current[1][0], coordinate[0]), Math.max(current[1][1], coordinate[1])],
       ] as [[number, number], [number, number]],
-      [[coordinates[0][0], coordinates[0][1]], [coordinates[0][0], coordinates[0][1]]] as [[number, number], [number, number]],
+      [[coordinatesRef.current[0][0], coordinatesRef.current[0][1]], [coordinatesRef.current[0][0], coordinatesRef.current[0][1]]] as [[number, number], [number, number]],
     );
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     map.fitBounds(bounds as LngLatBoundsLike, { padding: 48, maxZoom: 16, duration: reducedMotion ? 0 : 500 });
-  }, [fitToken, map, route, waypoints]);
+  }, [fitToken, map]);
   return null;
 }
 

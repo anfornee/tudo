@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 
-const OPENROUTESERVICE_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/cycling-road/geojson";
+const OPENROUTESERVICE_DIRECTIONS_URL = "https://api.heigit.org/openrouteservice/v2/directions/cycling-road/geojson";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();

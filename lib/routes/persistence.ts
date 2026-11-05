@@ -14,6 +14,7 @@ import {
 import { deleteObject, getBytes, listAll, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase-client";
 import { parseRouteFilePayload } from "@/lib/routes/model";
+import { isUniqueRouteName, nextUniqueRouteName } from "@/lib/routes/names";
 import type { PlannedRoute, RouteFilePayload } from "@/lib/routes/types";
 
 export interface SavedRoute {
@@ -75,6 +76,13 @@ async function uploadPayload(path: string, payload: RouteFilePayload) {
   });
 }
 
+async function requireUniqueName(userId: string, name: string, excludingId?: string) {
+  const routes = await listSavedRoutes(userId);
+  if (!isUniqueRouteName(name, routes, excludingId)) {
+    throw new Error("Route names must be unique. Choose a different name before saving.");
+  }
+}
+
 export async function listSavedRoutes(userId: string) {
   const snapshot = await getDocs(routeCollection(userId));
   return snapshot.docs
@@ -98,6 +106,7 @@ export async function loadRoutePayload(savedRoute: SavedRoute) {
 }
 
 export async function createSavedRoute(userId: string, name: string, description: string, route: PlannedRoute) {
+  await requireUniqueName(userId, name);
   const reference = doc(routeCollection(userId));
   const routeFilePath = revisionPath(userId, reference.id);
   const text = normalizedText(name, description);
@@ -117,6 +126,7 @@ export async function createSavedRoute(userId: string, name: string, description
 }
 
 export async function updateSavedRoute(savedRoute: SavedRoute, name: string, description: string, route: PlannedRoute) {
+  await requireUniqueName(savedRoute.userId, name, savedRoute.id);
   const routeFilePath = revisionPath(savedRoute.userId, savedRoute.id);
   const text = normalizedText(name, description);
   const payload: RouteFilePayload = { version: 1, ...text, route };
@@ -139,7 +149,13 @@ export async function updateSavedRoute(savedRoute: SavedRoute, name: string, des
 }
 
 export async function duplicateSavedRoute(savedRoute: SavedRoute, payload: RouteFilePayload) {
-  return createSavedRoute(savedRoute.userId, `${payload.name} copy`.slice(0, 120), payload.description, payload.route);
+  const routes = await listSavedRoutes(savedRoute.userId);
+  return createSavedRoute(
+    savedRoute.userId,
+    nextUniqueRouteName(payload.name, routes),
+    payload.description,
+    payload.route,
+  );
 }
 
 export async function deleteSavedRoute(savedRoute: SavedRoute) {

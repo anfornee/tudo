@@ -8,12 +8,14 @@ import {
   ArrowLeft,
   ArrowUp,
   Copy,
+  CornerDownLeft,
   Download,
   Focus,
   Loader2,
   Redo2,
   RotateCcw,
   Save,
+  Send,
   Trash2,
   Undo2,
   X,
@@ -37,12 +39,14 @@ import { Label } from "@/components/ui/label";
 import { getRiderProfile } from "@/lib/rider-profile/persistence";
 import { calculateRoadCyclingRoute } from "@/lib/routes/client";
 import {
+  addReturnToStart,
   commitWaypoints,
   createWaypointHistory,
   insertWaypoint,
   moveWaypoint,
   redoWaypoints,
   removeWaypoint,
+  routeReturnsToStart,
   shouldAcceptRoutingResponse,
   undoWaypoints,
   type WaypointHistory,
@@ -111,10 +115,11 @@ function parseLocalDraft(value: string) {
   }
 }
 
-export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
+export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooConnected }: {
   userId: string;
   savedRouteId?: string;
   mapStyleUrl: string | null;
+  wahooConnected: boolean;
 }) {
   const router = useRouter();
   const draftStorageKey = `tudo:route-draft:${userId}:${savedRouteId ?? "new"}`;
@@ -134,6 +139,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cursorIndex, setCursorIndex] = useState<number | null>(null);
@@ -141,6 +147,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
   const [selectedManeuver, setSelectedManeuver] = useState<RouteManeuver | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [clearOpen, setClearOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [baseline, setBaseline] = useState(draftSignature(DEFAULT_NAME, "", [], false));
   const activeRequestRef = useRef(0);
@@ -260,7 +267,6 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
           if (!shouldAcceptRoutingResponse(activeRequestRef.current, requestNumber)) return;
           lastRoutedKeyRef.current = key;
           setRoute(result);
-          setFitToken((value) => value + 1);
         })
         .catch((routeError) => {
           if (controller.signal.aborted || !shouldAcceptRoutingResponse(activeRequestRef.current, requestNumber)) return;
@@ -337,6 +343,20 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
     setSelectedWaypointIndex(destination);
   }
 
+  function returnToStart(mode: "out-and-back" | "best-route") {
+    try {
+      const waypoints = addReturnToStart(history.present, mode, () => crypto.randomUUID(), {
+        outboundGeometry: route?.geometry,
+      });
+      commit(waypoints);
+      setSelectedWaypointIndex(waypoints.length - 1);
+      setReturnOpen(false);
+    } catch (returnError) {
+      setError(returnError instanceof Error ? returnError.message : "Unable to return this route to its start.");
+      setReturnOpen(false);
+    }
+  }
+
   async function save() {
     if (!route || routing) return;
     if (!name.trim()) { setError("Give this route a name before saving."); return; }
@@ -403,6 +423,30 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
     }
   }
 
+  async function sendToWahoo() {
+    if (!savedRoute || dirty || publishing) return;
+    setPublishing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/integrations/wahoo/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ routeId: savedRoute.id }),
+      });
+      const body: unknown = await response.json();
+      const message = body && typeof body === "object" && typeof (body as Record<string, unknown>).error === "string"
+        ? (body as Record<string, string>).error
+        : "Unable to send this route to Wahoo.";
+      if (!response.ok) throw new Error(message);
+      setNotice("Route sent to Wahoo. It should appear after your Wahoo device syncs.");
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Unable to send this route to Wahoo.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   if (loading) return <div className="flex min-h-72 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /><span className="sr-only">Loading saved route</span></div>;
 
   return (
@@ -434,6 +478,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
             <Button variant="outline" size="sm" onClick={undo} disabled={!history.past.length}><Undo2 />Undo</Button>
             <Button variant="outline" size="sm" onClick={redo} disabled={!history.future.length}><Redo2 />Redo</Button>
             <Button variant="outline" size="sm" onClick={() => setFitToken((value) => value + 1)} disabled={!history.present.length}><Focus />Fit route</Button>
+            <Button variant="outline" size="sm" onClick={() => setReturnOpen(true)} disabled={!route || history.present.length < 2 || routeReturnsToStart(history.present) || history.present.length >= 25}><CornerDownLeft />Return to start</Button>
             <Button variant="outline" size="sm" onClick={removeSelectedWaypoint} disabled={selectedWaypointIndex === null}><X />Remove selected</Button>
             <Button variant="destructive" size="sm" onClick={() => setClearOpen(true)} disabled={!history.present.length}><RotateCcw />Clear</Button>
             <label className="ml-auto flex min-h-8 items-center gap-2 px-1 text-sm"><input type="checkbox" checked={avoidFerries} onChange={(event) => changeAvoidFerries(event.target.checked)} className="size-4 accent-primary" />Avoid ferries</label>
@@ -488,8 +533,20 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
           </section>
 
           <section className="rounded-xl border bg-card p-4 shadow-sm">
-            <h2 className="font-semibold">Export</h2>
-            <div className="mt-3 grid gap-2"><Button variant="outline" onClick={exportGpx} disabled={!route}><Download />Export GPX</Button><Button variant="outline" onClick={exportTcx} disabled={!route?.maneuvers.length}><Download />Export TCX with cues</Button></div>
+            <h2 className="font-semibold">Export &amp; sync</h2>
+            <div className="mt-3 grid gap-2">
+              <Button variant="outline" onClick={exportGpx} disabled={!route}><Download />Export GPX</Button>
+              <Button variant="outline" onClick={exportTcx} disabled={!route?.maneuvers.length}><Download />Export TCX with cues</Button>
+              {wahooConnected ? (
+                <Button onClick={() => void sendToWahoo()} disabled={!savedRoute || dirty || routing || publishing}>
+                  {publishing ? <Loader2 className="animate-spin" /> : <Send />}
+                  {publishing ? "Sending…" : "Send to Wahoo"}
+                </Button>
+              ) : (
+                <Link className={buttonVariants()} href="/api/integrations/wahoo/connect">Connect Wahoo</Link>
+              )}
+            </div>
+            {wahooConnected && (!savedRoute || dirty) ? <p className="mt-2 text-xs text-muted-foreground">Save this route with a unique name before sending it to Wahoo.</p> : null}
             <p className="mt-2 text-xs text-muted-foreground">TCX cue export is experimental and has not been validated on an original ELEMNT BOLT.</p>
           </section>
 
@@ -501,6 +558,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl }: {
       </div>
 
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Clear this route?</AlertDialogTitle><AlertDialogDescription>This removes every waypoint from the editor. You can still undo immediately afterward.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => { commit([]); setRoute(null); setSelectedWaypointIndex(null); setClearOpen(false); }}>Clear route</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={returnOpen} onOpenChange={setReturnOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>How should the route return?</AlertDialogTitle><AlertDialogDescription>Both options return to the exact starting point and can be undone afterward.</AlertDialogDescription></AlertDialogHeader><div className="grid gap-2"><AlertDialogAction variant="outline" className="h-auto justify-start px-4 py-3 text-left" onClick={() => returnToStart("out-and-back")}><span><span className="block font-medium">Out and back</span><span className="block text-xs font-normal text-muted-foreground">Use reverse shaping points to follow the outbound route back.</span></span></AlertDialogAction><AlertDialogAction variant="outline" className="h-auto justify-start px-4 py-3 text-left" onClick={() => returnToStart("best-route")}><span><span className="block font-medium">Best route back</span><span className="block text-xs font-normal text-muted-foreground">Let road-cycling routing choose the return from the current destination.</span></span></AlertDialogAction></div><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this saved route?</AlertDialogTitle><AlertDialogDescription>This removes the saved route and its stored geometry. This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" disabled={deleting} onClick={() => void removeSaved()}>{deleting ? "Deleting…" : "Delete route"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

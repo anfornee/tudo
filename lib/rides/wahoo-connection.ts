@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { adminAuth } from "@/lib/firebase-admin";
+import { getWahooClientCredentials, refreshWahooOAuthTokens } from "@/lib/rides/wahoo-oauth";
 import type { WahooOAuthTokens } from "@/lib/rides/wahoo-oauth-utils";
 
 const integrationCollection = "privateIntegrations";
@@ -19,6 +20,58 @@ function connectionDocument(uid: string) {
     .doc(uid)
     .collection(integrationCollection)
     .doc("wahoo");
+}
+
+interface StoredWahooConnection {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  scopes: string[];
+  expiresAt: Timestamp;
+  wahooUserId: number;
+}
+
+function parseStoredConnection(value: Record<string, unknown>): StoredWahooConnection | null {
+  return typeof value.accessToken === "string" && value.accessToken &&
+    typeof value.refreshToken === "string" && value.refreshToken &&
+    typeof value.wahooUserId === "number" && Number.isSafeInteger(value.wahooUserId) &&
+    value.expiresAt instanceof Timestamp
+    ? {
+        accessToken: value.accessToken,
+        refreshToken: value.refreshToken,
+        tokenType: typeof value.tokenType === "string" && value.tokenType ? value.tokenType : "Bearer",
+        scopes: Array.isArray(value.scopes) ? value.scopes.filter((scope): scope is string => typeof scope === "string") : [],
+        expiresAt: value.expiresAt,
+        wahooUserId: value.wahooUserId,
+      }
+    : null;
+}
+
+async function readWahooConnection(uid: string) {
+  const snapshot = await connectionDocument(uid).get();
+  return snapshot.exists ? parseStoredConnection(snapshot.data() ?? {}) : null;
+}
+
+export async function getWahooConnectionStatus(uid: string) {
+  return { connected: Boolean(await readWahooConnection(uid)) };
+}
+
+export async function getValidWahooAccessToken(uid: string) {
+  const connection = await readWahooConnection(uid);
+  if (!connection) throw new Error("Connect Wahoo before sending a route.");
+  if (connection.expiresAt.toMillis() > Date.now()) return connection.accessToken;
+
+  const refreshed = await refreshWahooOAuthTokens(getWahooClientCredentials(), connection.refreshToken);
+  const scopes = refreshed.scopes.length ? refreshed.scopes : connection.scopes;
+  await connectionDocument(uid).update({
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    tokenType: refreshed.tokenType,
+    scopes,
+    expiresAt: Timestamp.fromMillis(Date.now() + refreshed.expiresInSeconds * 1000),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return refreshed.accessToken;
 }
 
 async function connectedTudoUids(wahooUserId: number) {

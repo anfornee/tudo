@@ -14,6 +14,18 @@ export interface WahooOAuthConfig {
   redirectUri: string;
 }
 
+export interface WahooClientCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+export function getWahooClientCredentials(): WahooClientCredentials {
+  const clientId = process.env.WAHOO_CLIENT_ID?.trim();
+  const clientSecret = process.env.WAHOO_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) throw new Error("Wahoo OAuth is not configured");
+  return { clientId, clientSecret };
+}
+
 function validRedirectUri(value: string) {
   const url = URL.canParse(value) ? new URL(value) : null;
   if (!url || url.username || url.password || url.search || url.hash) return false;
@@ -22,15 +34,32 @@ function validRedirectUri(value: string) {
 }
 
 export function getWahooOAuthConfig(requestUrl: string): WahooOAuthConfig {
-  const clientId = process.env.WAHOO_CLIENT_ID?.trim();
-  const clientSecret = process.env.WAHOO_CLIENT_SECRET?.trim();
+  const { clientId, clientSecret } = getWahooClientCredentials();
   const redirectUri = process.env.WAHOO_REDIRECT_URI?.trim() || new URL(WAHOO_CALLBACK_PATH, requestUrl).toString();
 
-  if (!clientId || !clientSecret || !validRedirectUri(redirectUri)) {
+  if (!validRedirectUri(redirectUri)) {
     throw new Error("Wahoo OAuth is not configured");
   }
 
   return { clientId, clientSecret, redirectUri };
+}
+
+export async function refreshWahooOAuthTokens(credentials: WahooClientCredentials, refreshToken: string) {
+  const response = await fetch(WAHOO_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) throw new Error(`Wahoo token refresh failed (${response.status})`);
+  return parseWahooOAuthTokens(await response.json());
 }
 
 export async function exchangeWahooAuthorizationCode(config: WahooOAuthConfig, code: string) {
