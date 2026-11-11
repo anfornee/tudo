@@ -28,6 +28,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRiderProfile } from "@/lib/rider-profile/persistence";
+import { routeErrorMessage } from "@/lib/routes/errors";
 import { formatRouteDistance, formatRouteElevation } from "@/lib/routes/formatters";
 import { createRoutePreviewPath } from "@/lib/routes/geometry";
 import { parseRouteFile, routeImportFingerprint, type ParsedRouteImport } from "@/lib/routes/import";
@@ -133,7 +134,7 @@ export function RoutesLibraryContent({ userId, wahooConnected }: { userId: strin
           setRoutes((current) => current.map((route) => ({ ...route, previewPath: previewMap.get(route.id) || route.previewPath })));
         }
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Unable to load routes.");
+        setError(routeErrorMessage(loadError, "Unable to load routes.", "Unable to load route library"));
       } finally {
         setLoading(false);
       }
@@ -207,7 +208,7 @@ export function RoutesLibraryContent({ userId, wahooConnected }: { userId: strin
         setNotice(`${candidateName} imported.`);
       }
     } catch (saveError) {
-      setImportError(saveError instanceof Error ? saveError.message : "Unable to import this route.");
+      setImportError(routeErrorMessage(saveError, "Unable to import this route.", "Unable to import route"));
     } finally {
       setImporting(false);
     }

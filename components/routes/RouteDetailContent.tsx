@@ -179,7 +179,7 @@ export function RouteDetailContent({ userId, routeId, mapStyleUrl, wahooConnecte
       {notice ? <p role="status" className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">{notice}</p> : null}
       {error ? <p role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p> : null}
 
-      {mapStyleUrl ? <RouteDetailMap route={route} mapStyleUrl={mapStyleUrl} /> : <div role="status" className="flex min-h-80 items-center justify-center rounded-2xl border border-dashed bg-card p-6 text-center"><div><p className="font-medium">Map tiles are not configured</p><p className="mt-1 text-sm text-muted-foreground">Route details and exports remain available.</p></div></div>}
+      {mapStyleUrl ? <RouteDetailMap route={route} mapStyleUrl={mapStyleUrl} cursorIndex={cursorIndex} onCursorChange={setCursorIndex} /> : <div role="status" className="flex min-h-80 items-center justify-center rounded-2xl border border-dashed bg-card p-6 text-center"><div><p className="font-medium">Map tiles are not configured</p><p className="mt-1 text-sm text-muted-foreground">Route details and exports remain available.</p></div></div>}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border bg-card p-4"><span className="text-xs text-muted-foreground">Distance</span><strong className="mt-1 block text-lg">{formatRouteDistance(route.distanceMeters, units)}</strong></div>
@@ -188,7 +188,7 @@ export function RouteDetailContent({ userId, routeId, mapStyleUrl, wahooConnecte
         <div className="rounded-2xl border bg-card p-4"><span className="text-xs text-muted-foreground">Wahoo</span><strong className="mt-1 block text-lg">{wahooConnected ? syncStatus : "Not connected"}</strong></div>
       </section>
 
-      <section className="space-y-3"><div><h2 className="font-semibold">Elevation profile</h2><p className="text-sm text-muted-foreground">Hover or use the arrow keys to inspect the route.</p></div><RouteElevationChart points={route.geometry} units={units} cursorIndex={cursorIndex} onCursorChange={setCursorIndex} /></section>
+      <section className="space-y-3"><div><h2 className="font-semibold">Elevation profile</h2><p className="text-sm text-muted-foreground">Move across the map or profile to follow the route. Use the arrow keys while the profile is focused.</p></div><RouteElevationChart points={route.geometry} units={units} cursorIndex={cursorIndex} onCursorChange={setCursorIndex} /></section>
 
       <section className="grid gap-4 rounded-2xl border bg-card p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div><span className="block text-xs text-muted-foreground">Source</span><strong>{payload.source.label}</strong>{payload.source.originalFileName ? <span className="mt-1 block truncate text-xs text-muted-foreground">{payload.source.originalFileName}</span> : null}</div>
