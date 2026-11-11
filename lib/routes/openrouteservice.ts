@@ -127,6 +127,7 @@ export function adaptOpenRouteServiceResponse(
     preferences,
     waypoints,
     geometry,
+    segmentStartIndices: [0],
     waypointGeometryIndices: normalizedWaypointIndices,
     distanceMeters: distance,
     durationSeconds: finite(summary.duration),

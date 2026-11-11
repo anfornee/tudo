@@ -11,6 +11,15 @@ export interface RouteGeometryPoint {
   distanceMeters: number;
 }
 
+export type RouteSourceType = "tudo" | "gpx" | "tcx" | "wahoo";
+
+export interface RouteSourceMetadata {
+  type: RouteSourceType;
+  label: string;
+  originalFileName: string | null;
+  importedAt: string | null;
+}
+
 export type RouteManeuverType =
   | "depart"
   | "left"
@@ -39,8 +48,8 @@ export interface RouteManeuver {
 }
 
 export interface RouteProviderMetadata {
-  provider: "openrouteservice";
-  profile: "cycling-road";
+  provider: "openrouteservice" | "gpx" | "tcx" | "wahoo";
+  profile: "cycling-road" | "imported";
   attribution: string;
   engineVersion: string | null;
 }
@@ -50,6 +59,7 @@ export interface PlannedRoute {
   preferences: RoadCyclingPreferences;
   waypoints: RouteWaypoint[];
   geometry: RouteGeometryPoint[];
+  segmentStartIndices: number[];
   waypointGeometryIndices: number[];
   distanceMeters: number;
   durationSeconds: number | null;
@@ -72,5 +82,6 @@ export interface RouteFilePayload {
   version: 1;
   name: string;
   description: string;
+  source: RouteSourceMetadata;
   route: PlannedRoute;
 }

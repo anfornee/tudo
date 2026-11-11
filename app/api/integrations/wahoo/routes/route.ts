@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { publishSavedRouteToWahoo } from "@/lib/routes/wahoo";
+import { getWahooRouteStatuses, publishSavedRouteToWahoo } from "@/lib/routes/wahoo";
 
 export const runtime = "nodejs";
+
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
+  return NextResponse.json({ routes: await getWahooRouteStatuses(user.uid) });
+}
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();

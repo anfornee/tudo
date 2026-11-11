@@ -5,6 +5,7 @@ import type {
   RouteGeometryPoint,
   RouteManeuver,
   RouteManeuverType,
+  RouteSourceMetadata,
   RouteWaypoint,
 } from "./types.ts";
 
@@ -79,6 +80,41 @@ function parseManeuvers(value: unknown): RouteManeuver[] | null {
   return maneuvers.length === value.length ? maneuvers : null;
 }
 
+function parseSegmentStartIndices(value: unknown, geometryLength: number) {
+  if (value === undefined) return [0];
+  if (!Array.isArray(value) || !value.length) return null;
+  const indices = value.flatMap((item) => Number.isSafeInteger(item) ? [item as number] : []);
+  if (
+    indices.length !== value.length || indices[0] !== 0 ||
+    indices.some((item, index) => item < 0 || item >= geometryLength || (index > 0 && item <= indices[index - 1]))
+  ) return null;
+  return indices;
+}
+
+function defaultSource(provider: PlannedRoute["provider"]["provider"]): RouteSourceMetadata {
+  if (provider === "gpx") return { type: "gpx", label: "GPX import", originalFileName: null, importedAt: null };
+  if (provider === "tcx") return { type: "tcx", label: "TCX import", originalFileName: null, importedAt: null };
+  if (provider === "wahoo") return { type: "wahoo", label: "Wahoo", originalFileName: null, importedAt: null };
+  return { type: "tudo", label: "Tudo", originalFileName: null, importedAt: null };
+}
+
+function parseSource(value: unknown, provider: PlannedRoute["provider"]["provider"]): RouteSourceMetadata | null {
+  if (value === undefined) return defaultSource(provider);
+  const source = record(value);
+  if (
+    !source || !["tudo", "gpx", "tcx", "wahoo"].includes(String(source.type)) ||
+    typeof source.label !== "string" || source.label.length > 120 ||
+    !(source.originalFileName === null || typeof source.originalFileName === "string") ||
+    !(source.importedAt === null || typeof source.importedAt === "string")
+  ) return null;
+  return {
+    type: source.type as RouteSourceMetadata["type"],
+    label: source.label,
+    originalFileName: source.originalFileName,
+    importedAt: source.importedAt,
+  };
+}
+
 export function parsePlannedRoute(value: unknown): PlannedRoute | null {
   const route = record(value);
   const waypoints = parseWaypoints(route?.waypoints);
@@ -93,13 +129,19 @@ export function parsePlannedRoute(value: unknown): PlannedRoute | null {
   const durationSeconds = nullableFinite(route?.durationSeconds);
   const elevationGainMeters = nullableFinite(route?.elevationGainMeters);
   const elevationLossMeters = nullableFinite(route?.elevationLossMeters);
+  const segmentStartIndices = geometry ? parseSegmentStartIndices(route?.segmentStartIndices, geometry.length) : null;
+  const providerName = provider?.provider;
+  const profile = provider?.profile;
   if (
-    route?.version !== 1 || !waypoints || !geometry || !maneuvers ||
+    route?.version !== 1 || !waypoints || !geometry || !maneuvers || !segmentStartIndices || !provider ||
     typeof preferences?.avoidFerries !== "boolean" ||
     waypointGeometryIndices.length !== waypoints.length || waypointGeometryIndices.some((index) => index >= geometry.length) ||
     distanceMeters === null || distanceMeters <= 0 || durationSeconds === undefined ||
     elevationGainMeters === undefined || elevationLossMeters === undefined ||
-    provider?.provider !== "openrouteservice" || provider.profile !== "cycling-road" ||
+    !["openrouteservice", "gpx", "tcx", "wahoo"].includes(String(providerName)) ||
+    !["cycling-road", "imported"].includes(String(profile)) ||
+    (providerName === "openrouteservice" && profile !== "cycling-road") ||
+    (providerName !== "openrouteservice" && profile !== "imported") ||
     typeof provider.attribution !== "string" || !(provider.engineVersion === null || typeof provider.engineVersion === "string")
   ) return null;
   return {
@@ -107,6 +149,7 @@ export function parsePlannedRoute(value: unknown): PlannedRoute | null {
     preferences: { avoidFerries: preferences.avoidFerries },
     waypoints,
     geometry,
+    segmentStartIndices,
     waypointGeometryIndices,
     distanceMeters,
     durationSeconds,
@@ -114,8 +157,8 @@ export function parsePlannedRoute(value: unknown): PlannedRoute | null {
     elevationLossMeters,
     maneuvers,
     provider: {
-      provider: "openrouteservice",
-      profile: "cycling-road",
+      provider: providerName as PlannedRoute["provider"]["provider"],
+      profile: profile as PlannedRoute["provider"]["profile"],
       attribution: provider.attribution,
       engineVersion: provider.engineVersion,
     },
@@ -125,7 +168,8 @@ export function parsePlannedRoute(value: unknown): PlannedRoute | null {
 export function parseRouteFilePayload(value: unknown): RouteFilePayload | null {
   const payload = record(value);
   const route = parsePlannedRoute(payload?.route);
-  return payload?.version === 1 && typeof payload.name === "string" && typeof payload.description === "string" && route
-    ? { version: 1, name: payload.name, description: payload.description, route }
+  const source = route ? parseSource(payload?.source, route.provider.provider) : null;
+  return payload?.version === 1 && typeof payload.name === "string" && typeof payload.description === "string" && route && source
+    ? { version: 1, name: payload.name, description: payload.description, source, route }
     : null;
 }

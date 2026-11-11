@@ -1,4 +1,5 @@
 import type { PlannedRoute, RouteManeuverType } from "./types.ts";
+import { splitRouteGeometry } from "./geometry.ts";
 
 function xml(value: string) {
   return value
@@ -20,11 +21,14 @@ export function routeFilename(name: string, extension: "gpx" | "tcx") {
 }
 
 export function routeToGpx(route: PlannedRoute, name: string, description = "") {
-  const points = route.geometry.map((point) => {
-    const elevation = point.elevationMeters === null ? "" : `<ele>${point.elevationMeters.toFixed(2)}</ele>`;
-    return `<trkpt lat="${point.coordinate[1].toFixed(7)}" lon="${point.coordinate[0].toFixed(7)}">${elevation}</trkpt>`;
+  const segments = splitRouteGeometry(route.geometry, route.segmentStartIndices).map((segment) => {
+    const points = segment.map((point) => {
+      const elevation = point.elevationMeters === null ? "" : `<ele>${point.elevationMeters.toFixed(2)}</ele>`;
+      return `<trkpt lat="${point.coordinate[1].toFixed(7)}" lon="${point.coordinate[0].toFixed(7)}">${elevation}</trkpt>`;
+    }).join("");
+    return `<trkseg>${points}</trkseg>`;
   }).join("");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Tudo" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"><metadata><name>${xml(name)}</name>${description ? `<desc>${xml(description)}</desc>` : ""}</metadata><trk><name>${xml(name)}</name>${description ? `<desc>${xml(description)}</desc>` : ""}<type>Road cycling</type><trkseg>${points}</trkseg></trk></gpx>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Tudo" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"><metadata><name>${xml(name)}</name>${description ? `<desc>${xml(description)}</desc>` : ""}</metadata><trk><name>${xml(name)}</name>${description ? `<desc>${xml(description)}</desc>` : ""}<type>Road cycling</type>${segments}</trk></gpx>`;
 }
 
 const tcxPointTypes: Partial<Record<RouteManeuverType, string>> = {
@@ -57,9 +61,12 @@ function timeAtDistance(route: PlannedRoute, distanceMeters: number) {
 
 export function routeToTcx(route: PlannedRoute, name: string, description = "") {
   if (!route.maneuvers.length) throw new Error("TCX navigation export requires turn instructions.");
-  const track = route.geometry.map((point) => {
-    const altitude = point.elevationMeters === null ? "" : `<AltitudeMeters>${point.elevationMeters.toFixed(2)}</AltitudeMeters>`;
-    return `<Trackpoint><Time>${timeAtDistance(route, point.distanceMeters)}</Time><Position><LatitudeDegrees>${point.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${point.coordinate[0].toFixed(7)}</LongitudeDegrees></Position>${altitude}<DistanceMeters>${point.distanceMeters.toFixed(2)}</DistanceMeters></Trackpoint>`;
+  const tracks = splitRouteGeometry(route.geometry, route.segmentStartIndices).map((segment) => {
+    const points = segment.map((point) => {
+      const altitude = point.elevationMeters === null ? "" : `<AltitudeMeters>${point.elevationMeters.toFixed(2)}</AltitudeMeters>`;
+      return `<Trackpoint><Time>${timeAtDistance(route, point.distanceMeters)}</Time><Position><LatitudeDegrees>${point.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${point.coordinate[0].toFixed(7)}</LongitudeDegrees></Position>${altitude}<DistanceMeters>${point.distanceMeters.toFixed(2)}</DistanceMeters></Trackpoint>`;
+    }).join("");
+    return `<Track>${points}</Track>`;
   }).join("");
   const coursePoints = route.maneuvers.map((maneuver, index) => {
     const shortName = maneuver.instruction.replace(/\s+/g, " ").trim().slice(0, 10) || `Cue ${index + 1}`;
@@ -70,7 +77,7 @@ export function routeToTcx(route: PlannedRoute, name: string, description = "") 
   const end = route.geometry.at(-1)!;
   const beginAltitude = begin.elevationMeters === null ? "" : `<BeginAltitudeMeters>${begin.elevationMeters.toFixed(2)}</BeginAltitudeMeters>`;
   const endAltitude = end.elevationMeters === null ? "" : `<EndAltitudeMeters>${end.elevationMeters.toFixed(2)}</EndAltitudeMeters>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"><Courses><Course><Name>${xml(name.slice(0, 15))}</Name><Lap><TotalTimeSeconds>${duration.toFixed(1)}</TotalTimeSeconds><DistanceMeters>${route.distanceMeters.toFixed(2)}</DistanceMeters><BeginPosition><LatitudeDegrees>${begin.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${begin.coordinate[0].toFixed(7)}</LongitudeDegrees></BeginPosition>${beginAltitude}<EndPosition><LatitudeDegrees>${end.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${end.coordinate[0].toFixed(7)}</LongitudeDegrees></EndPosition>${endAltitude}<Intensity>Active</Intensity></Lap><Track>${track}</Track>${description ? `<Notes>${xml(description)}</Notes>` : ""}${coursePoints}</Course></Courses></TrainingCenterDatabase>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"><Courses><Course><Name>${xml(name.slice(0, 15))}</Name><Lap><TotalTimeSeconds>${duration.toFixed(1)}</TotalTimeSeconds><DistanceMeters>${route.distanceMeters.toFixed(2)}</DistanceMeters><BeginPosition><LatitudeDegrees>${begin.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${begin.coordinate[0].toFixed(7)}</LongitudeDegrees></BeginPosition>${beginAltitude}<EndPosition><LatitudeDegrees>${end.coordinate[1].toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${end.coordinate[0].toFixed(7)}</LongitudeDegrees></EndPosition>${endAltitude}<Intensity>Active</Intensity></Lap>${tracks}${description ? `<Notes>${xml(description)}</Notes>` : ""}${coursePoints}</Course></Courses></TrainingCenterDatabase>`;
 }
 
 export function downloadRouteText(contents: string, filename: string, type: string) {

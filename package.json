@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test lib/bills/utils.test.mjs lib/tasks/utils.test.mjs lib/rider-profile/profile.test.mjs lib/rides/calories.test.mjs lib/rides/cursor.test.mjs lib/rides/wahoo-oauth-utils.test.mjs lib/routes/editor.test.mjs lib/routes/export.test.mjs lib/routes/fit-course.test.mjs lib/routes/geometry.test.mjs lib/routes/names.test.mjs lib/routes/openrouteservice.test.mjs",
+    "test": "node --experimental-strip-types --test lib/bills/utils.test.mjs lib/tasks/utils.test.mjs lib/rider-profile/profile.test.mjs lib/rides/calories.test.mjs lib/rides/cursor.test.mjs lib/rides/wahoo-oauth-utils.test.mjs lib/routes/editor.test.mjs lib/routes/export.test.mjs lib/routes/fit-course.test.mjs lib/routes/geometry.test.mjs lib/routes/import.test.mjs lib/routes/library.test.mjs lib/routes/names.test.mjs lib/routes/openrouteservice.test.mjs lib/routes/wahoo-sync.test.mjs",
     "test:rules": "firebase emulators:exec --only auth,firestore,storage --project demo-tudo \"node --test lib/routes/firebase-rules.test.mjs\""
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fast-xml-parser": "^5.12.0",
     "firebase": "^12.17.1",
     "firebase-admin": "^14.3.0",
     "lucide-react": "^1.28.0",

@@ -10,10 +10,23 @@ service firebase.storage {
 		match /users/{userId}/routes/{routeId}/{allPaths=**} {
 			allow read, delete: if request.auth != null
 				&& request.auth.uid == userId;
+		}
+
+		match /users/{userId}/routes/{routeId}/revisions/{fileName} {
 			allow create, update: if request.auth != null
 				&& request.auth.uid == userId
 				&& request.resource.size < 20 * 1024 * 1024
 				&& request.resource.contentType == 'application/json';
+		}
+
+		match /users/{userId}/routes/{routeId}/originals/{fileName} {
+			allow create, update: if request.auth != null
+				&& request.auth.uid == userId
+				&& request.resource.size <= 10 * 1024 * 1024
+				&& request.resource.contentType in [
+					'application/gpx+xml',
+					'application/vnd.garmin.tcx+xml'
+				];
 		}
 	}
 }

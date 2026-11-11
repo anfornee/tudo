@@ -13,6 +13,7 @@ export interface ServerSavedRoute {
   name: string;
   description: string;
   updatedAt: Date;
+  revision: number;
   payload: NonNullable<ReturnType<typeof parseRouteFilePayload>>;
 }
 
@@ -21,6 +22,7 @@ interface ServerRouteRecord {
   name: string;
   description: string;
   updatedAt: unknown;
+  revision: number;
   payload: NonNullable<ReturnType<typeof parseRouteFilePayload>>;
 }
 
@@ -62,7 +64,7 @@ async function loadServerRouteRecord(userId: string, routeId: string): Promise<S
   const payload = parseRouteFilePayload(parsed);
   if (!payload) throw new Error("This saved route uses an unsupported format.");
 
-  return { id: routeId, name, description, updatedAt: value.updatedAt, payload };
+  return { id: routeId, name, description, updatedAt: value.updatedAt, revision: typeof value.revision === "number" ? value.revision : 1, payload };
 }
 
 export async function loadServerRoutePayload(userId: string, routeId: string) {
@@ -90,6 +92,7 @@ export async function loadServerSavedRoute(userId: string, routeId: string): Pro
     name: record.name,
     description: record.description,
     updatedAt: record.updatedAt.toDate(),
+    revision: record.revision,
     payload: record.payload,
   };
 }

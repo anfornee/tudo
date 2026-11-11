@@ -1,9 +1,21 @@
-# Road Cycling Route Planner
+# Routes Library and Road Cycling Route Planner
 
 ## Experience
 
-The Rides page links to `/rides/routes`, where an authenticated user can create
-and manage road-cycling routes. Click the map to add a start and destination,
+The Rides page has separate entry points for the route library at `/rides/routes`
+and the planner at `/rides/routes/new`. The library is the browsing and management
+surface; the planner remains the editing workspace. Saved routes use
+`/rides/routes/{routeId}` for details and `/rides/routes/{routeId}/edit` for the
+planner. Both surfaces read and write the same route repository.
+
+The library loads summary documents rather than full geometry sidecars. Cards use
+a normalized SVG preview path stored with the summary, so a large collection does
+not create a MapLibre instance per card. The grid supports name search, newest,
+oldest, distance sorting, source filtering, Wahoo-state filtering, and progressive
+24-card rendering. Legacy route summaries without preview paths load geometry only
+for the first page as a compatibility fallback.
+
+In the planner, click the map to add a start and destination,
 then add more waypoints, drag markers, or click the calculated route line to
 insert a shaping waypoint. Waypoint-list controls provide a keyboard-accessible
 alternative to dragging. Adding or recalculating waypoints preserves the current
@@ -68,19 +80,22 @@ require an issued key and attribution for free basemap service.
 ## Data model and persistence
 
 Route summaries live at `users/{uid}/routes/{routeId}`. They contain list-friendly
-fields only: ownership, name/description, timestamps, distance, duration,
-elevation totals, waypoint count, provider/profile, start coordinate, and the
-current Storage sidecar path.
+fields only: ownership, name/description, timestamps, revision, source/provider,
+distance, duration, elevation totals, point/segment counts, start coordinate,
+static preview path, original-import references, and the current Storage sidecar
+path. Provider IDs remain separate in the server-only Wahoo integration record.
 
 Normalized route payloads live at
 `users/{uid}/routes/{routeId}/revisions/{revisionId}.json`. A payload contains:
 
 - ordered stable waypoints and routing preferences;
 - geometry points with coordinate, nullable elevation, and cumulative distance;
+- ordered segment start indices, preserving discontinuous tracks;
 - waypoint-to-geometry indices;
 - normalized route totals;
 - structured maneuvers with location, leg distance, duration, and route distance;
-- provider/profile attribution metadata.
+- provider/profile attribution metadata;
+- source attribution and original filename.
 
 Revisioned uploads avoid corrupting an existing save if a Firestore update fails.
 After the Firestore pointer changes successfully, the client attempts to remove
@@ -89,13 +104,38 @@ away from Firestore's document-size limit. Firestore and Storage rules both scop
 routes below the authenticated UID. Saved payload reads use an authenticated
 same-origin API route, which validates the Firestore pointer and downloads the
 Storage object server-side instead of requiring browser CORS access to the bucket.
-No composite Firestore index or migration is required.
+Original GPX and TCX files are retained at
+`users/{uid}/routes/{routeId}/originals/{fileId}.{gpx|tcx}`. Storage rules restrict
+these paths to the owning UID, the supported XML content types, and 10 MB. Deleting
+a Tudo route removes its sidecars but deliberately does not delete a Wahoo copy.
 
 Saved route names are unique per Tudo user after Unicode normalization,
-whitespace folding, and case folding. Create and update operations enforce that
-rule before uploading a revision. Wahoo publishing repeats the check against
-Firestore and reloads the saved Storage sidecar, so unsaved editor state or
-client-supplied geometry cannot be published.
+whitespace folding, and case folding. A Firestore transaction claims the
+normalized name at `users/{uid}/routeNames/{encodedNormalizedName}` while writing
+the route, preventing concurrent creates or renames from claiming the same name.
+Legacy summaries are also checked before the transaction. Wahoo publishing repeats
+the check against Firestore and reloads the saved Storage sidecar, so unsaved
+editor state or client-supplied geometry cannot be published.
+
+## GPX and TCX import
+
+The library accepts drag-and-drop or file-picker imports up to 10 MB. XML parsing
+uses `fast-xml-parser` in the browser with DTD/entity declarations disabled. The
+importer validates XML, coordinate ranges, and minimum geometry before creating a
+canonical `PlannedRoute`.
+
+GPX 1.0 and 1.1 track points and route points are supported. Multiple tracks and
+routes are surfaced as separate candidates rather than silently discarded, and
+multiple track segments remain separate in normalized geometry. Elevation is
+preserved when present and deterministic distance/elevation totals are calculated.
+Named GPX route points become cues.
+
+TCX course tracks, laps containing tracks, multiple courses, elevation, notes, and
+CoursePoints are supported. CoursePoint direction types are normalized into Tudo
+maneuvers. A preview, editable name/description, statistics, source attribution,
+and duplicate-file warning are shown before save. File SHA-256 fingerprints support
+the warning; users can explicitly continue when the file intentionally contains
+another route. Route-name uniqueness is still enforced independently.
 
 ## Exports
 
@@ -122,7 +162,7 @@ elevation. Provider maneuvers become FIT course points; missing elevation is not
 invented. This encoder remains separate from Tudo's FIT activity encoder because
 activity and course files have different required semantics.
 
-## Wahoo Cloud publishing
+## Wahoo Cloud synchronization
 
 The editor enables **Send to Wahoo** only for a saved route with no unsaved
 changes. `POST /api/integrations/wahoo/routes` authenticates the Tudo session,
@@ -132,19 +172,40 @@ Wahoo's Cloud Routes API entirely from the existing Vercel backend. A stable
 kept in a server-only `users/{uid}/privateRouteIntegrations/{routeId}` document,
 allowing later sends to update the same route without exposing integration state.
 
-OAuth requests `user_read`, `offline_data`, and `routes_write`. Existing
-connections that already granted `routes_write` work without reconnecting;
-otherwise Wahoo returns a permission error and the user must reconnect. Access
-tokens are refreshed only when expired and immediately before publishing.
-Secrets and generated FIT bytes never enter the browser. Wahoo notes Cloud API
-routes sync to the Wahoo app and ELEMNT computer but not the legacy ELEMNT app.
+OAuth requests `user_read`, `offline_data`, `routes_read`, and `routes_write`.
+Existing connections without `routes_read` must reconnect before manual
+reconciliation. Access tokens are refreshed only when expired and immediately
+before an API operation. Secrets and generated FIT bytes never enter the browser.
+Wahoo notes Cloud API routes sync to the Wahoo app and ELEMNT computer but not the
+legacy ELEMNT app.
+
+Manual **Sync Wahoo** calls the documented route listing endpoint and reconciles
+only routes visible to Tudo's Wahoo application. Wahoo restricts that response to
+routes uploaded by the same application, so Tudo does not imply account-wide
+Strava, Komoot, Wahoo, or other-app route import. GPX/TCX import is the supported
+path for those routes.
+
+Server-only sync records track Wahoo ID, stable external ID, last synced local
+revision, last successful time, direction, remote provider update time, state, and
+last error. Library and detail views expose not-synced, synced, local-pending,
+failed, and conflict states. Reconciliation can recover an integration link from
+the stable external ID. It never fabricates geometry from metadata. When Wahoo's
+provider timestamp is newer than the last observed value, the state becomes a
+conflict because Tudo cannot safely reconstruct the remote geometry; publishing
+is blocked and duplicating the Tudo route is the safe-copy resolution.
+No automatic destructive merge or Wahoo deletion occurs.
+
+Remote FIT/route-file retrieval is deferred because it has not been validated
+against the production API response and is unnecessary for reconciling routes Tudo
+already owns. Automatic background sync and remote delete are also deferred.
 
 ## Verification and manual checks
 
 Automated tests cover provider adaptation and failures, geometry/distance and
 elevation, waypoint editing and history, stale response selection, defensive
-payload parsing, GPX output, TCX CoursePoints, missing elevations/cues, and
-Firebase owner-versus-stranger access.
+payload parsing, GPX/TCX import and export, multiple segments/candidates, unsafe
+XML, missing elevations/cues, atomic name helpers, mocked Wahoo response parsing
+and conflict states, and Firebase owner-versus-stranger access.
 
 Manual deployment checks still required:
 
@@ -152,10 +213,13 @@ Manual deployment checks still required:
 2. Deploy Firestore and Storage rules.
 3. Create, reshape, save, reopen, duplicate, and delete a route on desktop.
 4. Repeat core editing on an iPhone/PWA, including map gestures and marker drag.
-5. Import representative GPX and TCX exports into the intended navigation apps.
-6. Test experimental TCX cues on an original ELEMNT BOLT before making any
+5. Import representative GPX and TCX files from Strava, Komoot, Ride with GPS,
+   and Wahoo, including a multi-track file.
+6. Export imported routes into the intended navigation apps and test experimental
+   TCX cues on an original ELEMNT BOLT before making any
    compatibility claim.
-7. Send a saved route to a sandbox Wahoo account, sync a physical ELEMNT, then
+7. Reauthorize Wahoo with `routes_read routes_write`, send a saved route to a
+   sandbox Wahoo account, sync a physical ELEMNT, then
    edit, save, and resend it to verify create/update reconciliation.
 
 ## Primary references

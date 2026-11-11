@@ -372,7 +372,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooCo
       window.localStorage.removeItem(draftStorageKey);
       setNotice("Route saved.");
       await refreshSavedRoutes();
-      if (!savedRouteId) router.replace(`/rides/routes/${saved.id}`);
+      if (!savedRouteId) router.replace(`/rides/routes/${saved.id}/edit`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save this route.");
     } finally {
@@ -385,7 +385,18 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooCo
     setDuplicating(true);
     setError(null);
     try {
-      const duplicate = await duplicateSavedRoute(savedRoute, { version: 1, name, description, route });
+      const duplicate = await duplicateSavedRoute(savedRoute, {
+        version: 1,
+        name,
+        description,
+        source: {
+          type: savedRoute.source,
+          label: savedRoute.sourceLabel,
+          originalFileName: savedRoute.originalFileName,
+          importedAt: savedRoute.sourceImportedAt,
+        },
+        route,
+      });
       if (!duplicate) throw new Error("The duplicate could not be loaded.");
       router.push(`/rides/routes/${duplicate.id}`);
     } catch (duplicateError) {
@@ -453,7 +464,7 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooCo
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/rides" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Rides</Link>
+          <Link href="/rides/routes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />My Routes</Link>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Route Planner</h1>
           <p className="mt-1 text-sm text-muted-foreground">Create road-cycling routes, review elevation and cues, then export for your next ride.</p>
         </div>
@@ -556,8 +567,8 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooCo
           </section>
 
           <section className="rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved routes</h2>{savedRouteId ? <Link href="/rides/routes" className={buttonVariants({ variant: "outline", size: "sm" })}>New route</Link> : null}</div>
-            {savedRoutesLoading ? <p role="status" className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading saved routes…</p> : savedRoutesError ? <p role="alert" className="mt-3 text-sm text-destructive">{savedRoutesError}</p> : savedRoutes.length ? <ul className="mt-3 space-y-2">{savedRoutes.map((item) => <li key={item.id}><Link href={`/rides/routes/${item.id}`} aria-current={savedRoute?.id === item.id ? "page" : undefined} className={`block rounded-lg border p-3 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${savedRoute?.id === item.id ? "border-primary bg-primary/5" : ""}`}><span className="block truncate text-sm font-medium">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{formatRouteDistance(item.distanceMeters, units)} · {item.waypointCount} waypoints</span></Link></li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">Saved routes will appear here.</p>}
+            <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved routes</h2>{savedRouteId ? <Link href="/rides/routes/new" className={buttonVariants({ variant: "outline", size: "sm" })}>New route</Link> : null}</div>
+            {savedRoutesLoading ? <p role="status" className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading saved routes…</p> : savedRoutesError ? <p role="alert" className="mt-3 text-sm text-destructive">{savedRoutesError}</p> : savedRoutes.length ? <ul className="mt-3 space-y-2">{savedRoutes.map((item) => <li key={item.id}><Link href={`/rides/routes/${item.id}/edit`} aria-current={savedRoute?.id === item.id ? "page" : undefined} className={`block rounded-lg border p-3 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${savedRoute?.id === item.id ? "border-primary bg-primary/5" : ""}`}><span className="block truncate text-sm font-medium">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{formatRouteDistance(item.distanceMeters, units)} · {item.waypointCount} waypoints</span></Link></li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">Saved routes will appear here.</p>}
           </section>
         </aside>
       </div>

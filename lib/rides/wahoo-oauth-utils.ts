@@ -5,7 +5,7 @@ export const WAHOO_TOKEN_URL = "https://api.wahooligan.com/oauth/token";
 export const WAHOO_USER_URL = "https://api.wahooligan.com/v1/user";
 export const WAHOO_CALLBACK_PATH = "/api/integrations/wahoo/callback";
 export const WAHOO_STATE_COOKIE = "wahoo_oauth_state";
-export const WAHOO_SCOPES = ["user_read", "offline_data", "routes_write"] as const;
+export const WAHOO_SCOPES = ["user_read", "offline_data", "routes_read", "routes_write"] as const;
 
 export interface WahooOAuthTokens {
   accessToken: string;

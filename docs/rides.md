@@ -12,10 +12,11 @@ The dashboard includes a compact latest-ride card with distance, duration, and
 elevation. It links to the latest saved summary or to Ride Logging when no ride
 has been saved.
 
-The Rides page also includes an understated Route Planner entry. The planner at
-`/rides/routes` creates, saves, edits, and exports road-cycling courses without
-mixing planned routes into recorded-ride history. See [`routes.md`](./routes.md)
-for routing, persistence, export, setup, and device-compatibility details.
+The Rides page includes separate **View Routes** and **Plan a Route** actions. The
+library at `/rides/routes` and planner at `/rides/routes/new` create, import, save,
+edit, and export road-cycling courses without mixing planned routes into recorded-
+ride history. See [`routes.md`](./routes.md) for route-library, import, routing,
+persistence, Wahoo sync, setup, and device-compatibility details.
 
 ## Parsing and normalization
 

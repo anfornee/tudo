@@ -377,7 +377,10 @@ export function RidesPageContent({
 					<span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted"><MapPinned className="size-5" /></span>
 					<div><h2 className="font-semibold">Route Planner</h2><p className="mt-1 text-sm text-muted-foreground">Plan road cycling routes, explore elevation, and export them for your next ride.</p></div>
 				</div>
-				<Link href="/rides/routes" className={buttonVariants({ className: "sm:self-center" })}>Plan a Route</Link>
+				<div className="flex flex-wrap gap-2 sm:self-center">
+					<Link href="/rides/routes" className={buttonVariants({ variant: "outline" })}>View Routes</Link>
+					<Link href="/rides/routes/new" className={buttonVariants()}>Plan a Route</Link>
+				</div>
 			</section>
 
 			<div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-start">

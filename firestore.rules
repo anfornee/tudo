@@ -18,24 +18,41 @@ service cloud.firestore {
             'userId', 'name', 'description', 'createdAt', 'updatedAt',
             'routeFilePath', 'distanceMeters', 'durationSeconds',
             'elevationGainMeters', 'elevationLossMeters', 'waypointCount',
-            'provider', 'profile', 'startLatitude', 'startLongitude'
+            'provider', 'profile', 'startLatitude', 'startLongitude',
+            'normalizedName', 'originalFilePath', 'originalFileName',
+            'sourceFingerprint', 'segmentCount', 'revision', 'previewPath',
+            'source', 'sourceLabel', 'sourceImportedAt'
           ])
           && request.resource.data.keys().hasAll([
             'userId', 'name', 'description', 'createdAt', 'updatedAt',
             'routeFilePath', 'distanceMeters', 'durationSeconds',
             'elevationGainMeters', 'elevationLossMeters', 'waypointCount',
-            'provider', 'profile', 'startLatitude', 'startLongitude'
+            'provider', 'profile', 'startLatitude', 'startLongitude',
+            'normalizedName', 'originalFilePath', 'originalFileName',
+            'sourceFingerprint', 'segmentCount', 'revision', 'previewPath',
+            'source', 'sourceLabel', 'sourceImportedAt'
           ])
           && request.resource.data.userId == userId
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 120
+          && request.resource.data.normalizedName is string
+          && request.resource.data.normalizedName.size() > 0
+          && request.resource.data.normalizedName.size() <= 120
           && request.resource.data.description is string
           && request.resource.data.description.size() <= 1000
           && request.resource.data.createdAt is timestamp
           && request.resource.data.updatedAt is timestamp
           && request.resource.data.routeFilePath is string
           && request.resource.data.routeFilePath.matches('users/' + userId + '/routes/' + routeId + '/revisions/[^/]+[.]json')
+          && (request.resource.data.originalFilePath == null
+            || request.resource.data.originalFilePath.matches('users/' + userId + '/routes/' + routeId + '/originals/[^/]+[.](gpx|tcx)'))
+          && (request.resource.data.originalFileName == null
+            || (request.resource.data.originalFileName is string
+              && request.resource.data.originalFileName.size() <= 255))
+          && (request.resource.data.sourceFingerprint == null
+            || (request.resource.data.sourceFingerprint is string
+              && request.resource.data.sourceFingerprint.matches('[0-9a-f]{64}')))
           && request.resource.data.distanceMeters is number
           && request.resource.data.distanceMeters > 0
           && (request.resource.data.durationSeconds == null
@@ -50,8 +67,25 @@ service cloud.firestore {
           && request.resource.data.waypointCount is int
           && request.resource.data.waypointCount >= 2
           && request.resource.data.waypointCount <= 25
-          && request.resource.data.provider == 'openrouteservice'
-          && request.resource.data.profile == 'cycling-road'
+          && request.resource.data.segmentCount is int
+          && request.resource.data.segmentCount >= 1
+          && request.resource.data.revision is int
+          && request.resource.data.revision >= 1
+          && request.resource.data.previewPath is string
+          && request.resource.data.previewPath.size() <= 10000
+          && request.resource.data.source in ['tudo', 'gpx', 'tcx', 'wahoo']
+          && request.resource.data.sourceLabel is string
+          && request.resource.data.sourceLabel.size() > 0
+          && request.resource.data.sourceLabel.size() <= 120
+          && (request.resource.data.sourceImportedAt == null
+            || (request.resource.data.sourceImportedAt is string
+              && request.resource.data.sourceImportedAt.size() <= 50))
+          && request.resource.data.provider in ['openrouteservice', 'gpx', 'tcx', 'wahoo']
+          && request.resource.data.profile in ['cycling-road', 'imported']
+          && ((request.resource.data.provider == 'openrouteservice'
+              && request.resource.data.profile == 'cycling-road')
+            || (request.resource.data.provider != 'openrouteservice'
+              && request.resource.data.profile == 'imported'))
           && request.resource.data.startLatitude is number
           && request.resource.data.startLatitude >= -90
           && request.resource.data.startLatitude <= 90
@@ -63,11 +97,35 @@ service cloud.firestore {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null
         && request.auth.uid == userId
-        && validRoute();
+        && validRoute()
+        && request.resource.data.revision == 1;
       allow update: if request.auth != null
         && request.auth.uid == userId
         && validRoute()
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && ((!resource.data.keys().hasAny(['revision'])
+              && request.resource.data.revision == 2)
+            || (resource.data.keys().hasAny(['revision'])
+              && request.resource.data.revision == resource.data.revision + 1));
+    }
+
+    match /users/{userId}/routeNames/{nameId} {
+      function validRouteNameClaim() {
+        return request.resource.data.keys().hasOnly(['routeId', 'normalizedName'])
+          && request.resource.data.keys().hasAll(['routeId', 'normalizedName'])
+          && request.resource.data.routeId is string
+          && request.resource.data.routeId.size() > 0
+          && request.resource.data.normalizedName is string
+          && request.resource.data.normalizedName.size() > 0
+          && request.resource.data.normalizedName.size() <= 120;
+      }
+
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && validRouteNameClaim()
+        && getAfter(/databases/$(database)/documents/users/$(userId)/routes/$(request.resource.data.routeId)).data.normalizedName
+          == request.resource.data.normalizedName;
     }
 
     match /users/{userId}/riderProfiles/cycling {

@@ -36,11 +36,54 @@ export function geometryWithCumulativeDistance(
   });
 }
 
-export function deriveElevationChange(points: readonly RouteGeometryPoint[]) {
+export function geometryFromCoordinateSegments(
+  segments: readonly (readonly [number, number, number?][])[],
+) {
+  const geometry: RouteGeometryPoint[] = [];
+  const segmentStartIndices: number[] = [];
+  let distanceMeters = 0;
+
+  for (const segment of segments) {
+    if (segment.length < 2) continue;
+    segmentStartIndices.push(geometry.length);
+    segment.forEach((coordinate, index) => {
+      if (index > 0) {
+        const previous = segment[index - 1];
+        distanceMeters += distanceBetweenCoordinates(
+          [previous[0], previous[1]],
+          [coordinate[0], coordinate[1]],
+        );
+      }
+      const elevation = coordinate[2];
+      geometry.push({
+        coordinate: [coordinate[0], coordinate[1]],
+        elevationMeters: typeof elevation === "number" && Number.isFinite(elevation) ? elevation : null,
+        distanceMeters,
+      });
+    });
+  }
+
+  return { geometry, segmentStartIndices };
+}
+
+export function splitRouteGeometry(
+  geometry: readonly RouteGeometryPoint[],
+  segmentStartIndices: readonly number[] = [0],
+) {
+  const starts = [...new Set(segmentStartIndices)]
+    .filter((index) => Number.isSafeInteger(index) && index >= 0 && index < geometry.length)
+    .sort((left, right) => left - right);
+  if (!starts.length || starts[0] !== 0) starts.unshift(0);
+  return starts.map((start, index) => geometry.slice(start, starts[index + 1] ?? geometry.length));
+}
+
+export function deriveElevationChange(points: readonly RouteGeometryPoint[], segmentStartIndices: readonly number[] = [0]) {
   let gain = 0;
   let loss = 0;
   let segments = 0;
+  const starts = new Set(segmentStartIndices);
   for (let index = 1; index < points.length; index += 1) {
+    if (starts.has(index)) continue;
     const previous = points[index - 1].elevationMeters;
     const current = points[index].elevationMeters;
     if (previous === null || current === null) continue;
@@ -50,6 +93,43 @@ export function deriveElevationChange(points: readonly RouteGeometryPoint[]) {
     segments += 1;
   }
   return segments ? { gainMeters: gain, lossMeters: loss } : null;
+}
+
+export function createRoutePreviewPath(route: Pick<PlannedRoute, "geometry" | "segmentStartIndices">, maxPoints = 160) {
+  const segments = splitRouteGeometry(route.geometry, route.segmentStartIndices).filter((segment) => segment.length > 1);
+  if (!segments.length) return "";
+  const totalPoints = segments.reduce((sum, segment) => sum + segment.length, 0);
+  const sampled = segments.map((segment) => {
+    const budget = Math.max(2, Math.floor(maxPoints * segment.length / totalPoints));
+    if (segment.length <= budget) return segment;
+    return Array.from({ length: budget }, (_, index) => (
+      segment[Math.round(index / (budget - 1) * (segment.length - 1))]
+    ));
+  });
+  const coordinates = sampled.flatMap((segment) => segment.map((point) => point.coordinate));
+  const meanLatitude = coordinates.reduce((sum, coordinate) => sum + coordinate[1], 0) / coordinates.length;
+  const longitudeScale = Math.max(0.1, Math.cos(meanLatitude * Math.PI / 180));
+  const projected = sampled.map((segment) => segment.map((point) => ({
+    x: point.coordinate[0] * longitudeScale,
+    y: point.coordinate[1],
+  })));
+  const all = projected.flat();
+  const minX = Math.min(...all.map((point) => point.x));
+  const maxX = Math.max(...all.map((point) => point.x));
+  const minY = Math.min(...all.map((point) => point.y));
+  const maxY = Math.max(...all.map((point) => point.y));
+  const spanX = Math.max(1e-9, maxX - minX);
+  const spanY = Math.max(1e-9, maxY - minY);
+  const scale = Math.min(900 / spanX, 900 / spanY);
+  const width = spanX * scale;
+  const height = spanY * scale;
+  const offsetX = (1000 - width) / 2;
+  const offsetY = (1000 - height) / 2;
+  return projected.map((segment) => segment.map((point, index) => {
+    const x = offsetX + (point.x - minX) * scale;
+    const y = 1000 - (offsetY + (point.y - minY) * scale);
+    return `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ")).join(" ");
 }
 
 export function nearestGeometryIndexByDistance(points: readonly RouteGeometryPoint[], distanceMeters: number) {
