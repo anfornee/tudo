@@ -538,10 +538,15 @@ export function RoutePlannerContent({ userId, savedRouteId, mapStyleUrl, wahooCo
               <Button variant="outline" onClick={exportGpx} disabled={!route}><Download />Export GPX</Button>
               <Button variant="outline" onClick={exportTcx} disabled={!route?.maneuvers.length}><Download />Export TCX with cues</Button>
               {wahooConnected ? (
-                <Button onClick={() => void sendToWahoo()} disabled={!savedRoute || dirty || routing || publishing}>
-                  {publishing ? <Loader2 className="animate-spin" /> : <Send />}
-                  {publishing ? "Sending…" : "Send to Wahoo"}
-                </Button>
+                <>
+                  <Button onClick={() => void sendToWahoo()} disabled={!savedRoute || dirty || routing || publishing}>
+                    {publishing ? <Loader2 className="animate-spin" /> : <Send />}
+                    {publishing ? "Sending…" : "Send to Wahoo"}
+                  </Button>
+                  <Link className={buttonVariants({ variant: "outline" })} href="/api/integrations/wahoo/connect">
+                    Reconnect Wahoo
+                  </Link>
+                </>
               ) : (
                 <Link className={buttonVariants()} href="/api/integrations/wahoo/connect">Connect Wahoo</Link>
               )}

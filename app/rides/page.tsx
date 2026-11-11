@@ -31,10 +31,15 @@ export default async function RidesPage({ searchParams }: { searchParams: Promis
           <p className="mt-1 text-sm text-muted-foreground">Import and keep your cycling activity history.</p>
         </div>
         {wahoo.connected ? (
-          <span className={buttonVariants({ variant: "outline" })} aria-label="Wahoo account connected">
-            <CheckCircle2 className="text-green-600 dark:text-green-400" />
-            Wahoo connected
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className={buttonVariants({ variant: "outline" })} aria-label="Wahoo account connected">
+              <CheckCircle2 className="text-green-600 dark:text-green-400" />
+              Wahoo connected
+            </span>
+            <Link className={buttonVariants({ variant: "outline" })} href="/api/integrations/wahoo/connect">
+              Reconnect Wahoo
+            </Link>
+          </div>
         ) : (
           <Link className={buttonVariants({ variant: "outline" })} href="/api/integrations/wahoo/connect">
             Connect Wahoo
