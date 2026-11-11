@@ -86,8 +86,10 @@ Revisioned uploads avoid corrupting an existing save if a Firestore update fails
 After the Firestore pointer changes successfully, the client attempts to remove
 the preceding revision. This sidecar design keeps long geometry and cue arrays
 away from Firestore's document-size limit. Firestore and Storage rules both scope
-routes below the authenticated UID. No composite Firestore index or migration is
-required.
+routes below the authenticated UID. Saved payload reads use an authenticated
+same-origin API route, which validates the Firestore pointer and downloads the
+Storage object server-side instead of requiring browser CORS access to the bucket.
+No composite Firestore index or migration is required.
 
 Saved route names are unique per Tudo user after Unicode normalization,
 whitespace folding, and case folding. Create and update operations enforce that

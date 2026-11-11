@@ -16,11 +16,19 @@ export interface ServerSavedRoute {
   payload: NonNullable<ReturnType<typeof parseRouteFilePayload>>;
 }
 
+interface ServerRouteRecord {
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: unknown;
+  payload: NonNullable<ReturnType<typeof parseRouteFilePayload>>;
+}
+
 function validRouteId(value: string) {
   return /^[A-Za-z0-9_-]{1,128}$/.test(value);
 }
 
-export async function loadServerSavedRoute(userId: string, routeId: string): Promise<ServerSavedRoute> {
+async function loadServerRouteRecord(userId: string, routeId: string): Promise<ServerRouteRecord> {
   if (!validRouteId(routeId)) throw new Error("Invalid saved route.");
 
   const routes = getFirestore(adminAuth.app).collection("users").doc(userId).collection("routes");
@@ -35,32 +43,53 @@ export async function loadServerSavedRoute(userId: string, routeId: string): Pro
     throw new Error("This saved route is invalid.");
   }
 
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+    (isFirebaseEmulatorEnvironment ? `${localFirebaseProjectId}.firebasestorage.app` : undefined);
+  let bytes: Buffer;
+  try {
+    [bytes] = await getStorage(adminAuth.app).bucket(bucketName).file(routeFilePath).download();
+  } catch (error) {
+    console.error("Unable to download saved route payload:", error);
+    throw new Error("This saved route could not be loaded.");
+  }
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error("This saved route is too large to load.");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    throw new Error("This saved route uses an unsupported format.");
+  }
+  const payload = parseRouteFilePayload(parsed);
+  if (!payload) throw new Error("This saved route uses an unsupported format.");
+
+  return { id: routeId, name, description, updatedAt: value.updatedAt, payload };
+}
+
+export async function loadServerRoutePayload(userId: string, routeId: string) {
+  return (await loadServerRouteRecord(userId, routeId)).payload;
+}
+
+export async function loadServerSavedRoute(userId: string, routeId: string): Promise<ServerSavedRoute> {
+  const record = await loadServerRouteRecord(userId, routeId);
+  const routes = getFirestore(adminAuth.app).collection("users").doc(userId).collection("routes");
   const duplicateNames = await routes.get();
-  const normalizedName = normalizeRouteName(name);
+  const normalizedName = normalizeRouteName(record.name);
   if (duplicateNames.docs.some((document) => (
     document.id !== routeId && normalizeRouteName(String(document.data().name ?? "")) === normalizedName
   ))) {
     throw new Error("Route names must be unique before sending a route to Wahoo.");
   }
-
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
-    (isFirebaseEmulatorEnvironment ? `${localFirebaseProjectId}.firebasestorage.app` : undefined);
-  const [bytes] = await getStorage(adminAuth.app).bucket(bucketName).file(routeFilePath).download();
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error("This saved route is too large to publish.");
-  const parsed: unknown = JSON.parse(bytes.toString("utf8"));
-  const payload = parseRouteFilePayload(parsed);
-  if (!payload) throw new Error("This saved route uses an unsupported format.");
-  if (normalizeRouteName(payload.name) !== normalizedName) {
+  if (normalizeRouteName(record.payload.name) !== normalizedName) {
     throw new Error("Save the latest route name before sending it to Wahoo.");
   }
-  if (!(value.updatedAt instanceof Timestamp)) throw new Error("This saved route is missing its update time.");
+  if (!(record.updatedAt instanceof Timestamp)) throw new Error("This saved route is missing its update time.");
 
   return {
-    id: routeId,
+    id: record.id,
     userId,
-    name,
-    description,
-    updatedAt: value.updatedAt.toDate(),
-    payload,
+    name: record.name,
+    description: record.description,
+    updatedAt: record.updatedAt.toDate(),
+    payload: record.payload,
   };
 }

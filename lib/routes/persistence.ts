@@ -11,7 +11,7 @@ import {
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
-import { deleteObject, getBytes, listAll, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, listAll, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase-client";
 import { parseRouteFilePayload } from "@/lib/routes/model";
 import { isUniqueRouteName, nextUniqueRouteName } from "@/lib/routes/names";
@@ -96,10 +96,16 @@ export async function getSavedRoute(userId: string, routeId: string) {
 }
 
 export async function loadRoutePayload(savedRoute: SavedRoute) {
-  const expectedPrefix = `users/${savedRoute.userId}/routes/${savedRoute.id}/revisions/`;
-  if (!savedRoute.routeFilePath.startsWith(expectedPrefix)) throw new Error("Invalid saved route path.");
-  const bytes = await getBytes(ref(storage, savedRoute.routeFilePath), 20 * 1024 * 1024);
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  const response = await fetch(`/api/routes/${encodeURIComponent(savedRoute.id)}/payload`, {
+    cache: "no-store",
+  });
+  const parsed: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = parsed && typeof parsed === "object" && typeof (parsed as Record<string, unknown>).error === "string"
+      ? (parsed as Record<string, string>).error
+      : "Unable to load this saved route.";
+    throw new Error(message);
+  }
   const payload = parseRouteFilePayload(parsed);
   if (!payload) throw new Error("This saved route uses an unsupported format.");
   return payload;
