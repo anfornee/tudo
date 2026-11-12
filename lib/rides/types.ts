@@ -2,6 +2,11 @@ import type { Timestamp } from "firebase/firestore";
 
 import type { RideData, RideSample } from "@/lib/ride.types";
 import type { RideCalorieAnalysis } from "@/lib/rides/calories";
+import type {
+  PersistedRideAnalytics,
+  RideAnalyticsProcessing,
+  RidePowerProvenance,
+} from "@/lib/rides/analytics-model";
 
 export type RideSource = RideData["source"];
 
@@ -31,6 +36,10 @@ export interface SavedRide extends RideSummaryMetrics {
   source: RideSource;
   originalFilePath: string;
   sampleFilePath?: string | null;
+  sourceRevision?: string | null;
+  powerProvenance?: RidePowerProvenance;
+  analytics?: PersistedRideAnalytics | null;
+  analyticsProcessing?: RideAnalyticsProcessing | null;
 }
 
 export interface StoredRideSamples {

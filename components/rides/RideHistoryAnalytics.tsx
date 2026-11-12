@@ -1,14 +1,45 @@
 import { Flame, Trophy } from "lucide-react";
 
 import { RideAnnualStats } from "@/components/rides/RideAnnualStats";
+import { ProfileStats } from "@/components/rides/ProfileStats";
+import { PerformanceTrends } from "@/components/rides/PerformanceTrends";
 import { RideCalendar } from "@/components/rides/RideCalendar";
 import { RideWeeklyActivityChart } from "@/components/rides/RideWeeklyActivityChart";
 import { aggregateCurrentWeekByDay, calculateWeeklyRideStreak, type RideHistoryItem } from "@/lib/rides/analytics";
+import type { RiderUnitSystem } from "@/lib/rider-profile/types";
+import type { ProfileAnalyticsApiResponse } from "@/lib/rides/profile-analytics-client";
 
-export function RideHistoryAnalytics({ rides }: { rides: RideHistoryItem[] }) {
+export function RideHistoryAnalytics({
+  rides,
+  profileAnalytics,
+  profileLoading,
+  profileError,
+  units,
+  onRefreshProfile,
+}: {
+  rides: RideHistoryItem[];
+  profileAnalytics: ProfileAnalyticsApiResponse | null;
+  profileLoading: boolean;
+  profileError: string | null;
+  units: RiderUnitSystem;
+  onRefreshProfile: () => void | Promise<unknown>;
+}) {
   const currentWeekDays = aggregateCurrentWeekByDay(rides);
   const streak = calculateWeeklyRideStreak(rides);
-  if (!rides.length) return null;
+  if (!rides.length) {
+    return (
+      <section className="space-y-4">
+        <ProfileStats
+          data={profileAnalytics}
+          loading={profileLoading}
+          error={profileError}
+          units={units}
+          onRefresh={onRefreshProfile}
+        />
+        <PerformanceTrends key={profileAnalytics?.profile?.calculatedAt ?? "empty"} units={units} expectedGeneration={profileAnalytics?.profile?.sourceGeneration ?? null} />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4">
@@ -21,6 +52,14 @@ export function RideHistoryAnalytics({ rides }: { rides: RideHistoryItem[] }) {
         <RideCalendar rides={rides} />
       </div>
       <RideAnnualStats rides={rides} />
+      <ProfileStats
+        data={profileAnalytics}
+        loading={profileLoading}
+        error={profileError}
+        units={units}
+        onRefresh={onRefreshProfile}
+      />
+      <PerformanceTrends key={profileAnalytics?.profile?.calculatedAt ?? "empty"} units={units} expectedGeneration={profileAnalytics?.profile?.sourceGeneration ?? null} />
     </section>
   );
 }

@@ -1,10 +1,7 @@
 import { Decoder, Stream } from "@garmin/fitsdk";
-import {
-  calculateBestAverage,
-  calculateNormalizedPower,
-  calculatePowerPercentiles,
-} from "./rideCalculations";
+import { calculatePowerPercentiles } from "./rideCalculations";
 import type { RideData, RideSample } from "./ride.types";
+import { calculatePowerAnalytics } from "./rides/ride-analytics";
 
 interface FitRecordSample {
   timestamp: Date;
@@ -108,16 +105,10 @@ export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
     ? Math.max(...heartRateSamples)
     : null;
 
-  const averagePower = powerSamples.length
-    ? powerSamples.reduce((sum, value) => sum + value, 0) / powerSamples.length
-    : null;
-
   const averageCadence = cadenceSamples.length
     ? cadenceSamples.reduce((sum, value) => sum + value, 0) /
       cadenceSamples.length
     : null;
-
-  const maxPower = powerSamples.length ? Math.max(...powerSamples) : null;
 
   const maxCadence = cadenceSamples.length ? Math.max(...cadenceSamples) : null;
 
@@ -136,19 +127,22 @@ export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
     : durationSeconds > 0
       ? (distanceMeters / durationSeconds) * 2.236936
       : 0;
+  const powerProvenance = powerSamples.length ? "measured" as const : "unavailable" as const;
+  const powerAnalytics = calculatePowerAnalytics(samples, powerProvenance);
 
   return {
     source: "fit",
+    powerProvenance,
     distanceMiles: distanceMeters / 1609.344,
     durationSeconds,
     movingTimeSeconds,
 
     averageSpeedMph,
 
-    averagePower,
-    maxPower,
+    averagePower: powerAnalytics.averageWatts,
+    maxPower: powerAnalytics.maxWatts,
 
-    normalizedPower: calculateNormalizedPower(powerSamples),
+    normalizedPower: powerAnalytics.normalizedWatts,
 
     averageCadence,
     maxCadence,
@@ -160,10 +154,10 @@ export async function parseZwiftFit(buffer: ArrayBuffer): Promise<RideData> {
     zeroPowerSeconds: powerSamples.filter((power) => power === 0).length, // Zwift records power at 1 Hz, so each sample represents one second.
 
     bestPower: {
-      oneMinute: calculateBestAverage(powerSamples, 60),
-      fiveMinutes: calculateBestAverage(powerSamples, 300),
-      tenMinutes: calculateBestAverage(powerSamples, 600),
-      twentyMinutes: calculateBestAverage(powerSamples, 1200),
+      oneMinute: powerAnalytics.powerDuration[60]?.averageWatts ?? null,
+      fiveMinutes: powerAnalytics.powerDuration[300]?.averageWatts ?? null,
+      tenMinutes: powerAnalytics.powerDuration[600]?.averageWatts ?? null,
+      twentyMinutes: powerAnalytics.powerDuration[1200]?.averageWatts ?? null,
     },
 
     powerPercentiles: calculatePowerPercentiles(powerSamples),

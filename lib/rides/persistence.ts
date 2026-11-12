@@ -1,6 +1,5 @@
 import {
 	collection,
-	deleteDoc,
 	doc,
 	getDoc,
 	getDocs,
@@ -34,6 +33,8 @@ import { summaryFromRide } from "@/lib/rides/summary";
 import { getRiderProfile } from "@/lib/rider-profile/persistence";
 import type { RiderProfile } from "@/lib/rider-profile/types";
 import { calorieInputFromSummary, estimateCyclingCalories } from "@/lib/rides/calories";
+import { RIDE_ANALYTICS_ALGORITHM_VERSION } from "@/lib/rides/analytics-model";
+import { parseStoredRideSamples } from "@/lib/rides/sample-payload";
 
 function ridesCollection(userId: string) {
 	return collection(db, "users", userId, "rides");
@@ -90,40 +91,6 @@ export async function getRide(
 	return rideFromDocument(
 		snapshot.id,
 		snapshot.data() as Omit<SavedRide, "id">,
-	);
-}
-
-function isRideSample(
-	value: unknown,
-): value is RideSample {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-
-	const sample = value as Record<string, unknown>;
-
-	return (
-		typeof sample.elapsedSeconds === "number" &&
-		Number.isFinite(sample.elapsedSeconds) &&
-		[
-			"timestampMs",
-			"latitude",
-			"longitude",
-			"power",
-			"speedMph",
-			"cadence",
-			"heartRate",
-			"temperatureC",
-			"elevationFeet",
-			"distanceMiles",
-		].every(
-			(key) =>
-				 sample[key] == null ||
-				(
-					typeof sample[key] === "number" &&
-					Number.isFinite(sample[key])
-				),
-		)
 	);
 }
 
@@ -198,24 +165,32 @@ export async function getRideSamples(
 		);
 	}
 
-	const stored =
-		parsed as Partial<StoredRideSamples>;
+	return parseStoredRideSamples(parsed).samples;
+}
 
-	if (
-		stored.version !== 1 ||
-		!Array.isArray(
-			stored.samples,
-		) ||
-		!stored.samples.every(
-			isRideSample,
-		)
-	) {
-		throw new Error(
-			"Unsupported ride sample data.",
-		);
+export async function requestRideAnalytics(rideId: string, force = false) {
+	const response = await fetch(`/api/rides/${encodeURIComponent(rideId)}/analytics`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ force }),
+	});
+	if (!response.ok && response.status !== 409) {
+		throw new Error("Ride analytics could not be processed.");
 	}
+	return await response.json() as { outcome: string };
+}
 
-	return stored.samples;
+function pendingAnalytics(sourceRevision: string) {
+	return {
+		state: "pending" as const,
+		algorithmVersion: RIDE_ANALYTICS_ALGORITHM_VERSION,
+		sourceRevision,
+		lastAttemptedAt: null,
+		lastSuccessfulAt: null,
+		leaseToken: null,
+		leaseExpiresAt: null,
+		error: null,
+	};
 }
 
 export async function saveRide(
@@ -249,6 +224,8 @@ export async function saveRide(
 	const sampleFile = sampleFilePath
 		? ref(storage, sampleFilePath)
 		: null;
+	const sourceRevision = sampleFilePath ?? originalFilePath;
+	const powerProvenance = ride.powerProvenance;
 
 	try {
 		await uploadBytes(
@@ -294,6 +271,9 @@ export async function saveRide(
 				source: ride.source,
 				originalFilePath,
 				sampleFilePath,
+				sourceRevision,
+				powerProvenance,
+				analyticsProcessing: pendingAnalytics(sourceRevision),
 				...summaryFromRide(ride, riderProfile, activityDate),
 			},
 		);
@@ -316,6 +296,13 @@ export async function saveRide(
 		});
 
 		throw error;
+	}
+
+	try {
+		await requestRideAnalytics(rideDocument.id);
+	} catch (analyticsError) {
+		// The ride and source files are durable; discovery/backfill can retry.
+		console.error("Ride saved but analytics processing failed:", analyticsError);
 	}
 
 	const savedRide = await getRide(
@@ -382,6 +369,8 @@ export async function replaceRideAnalysis(
 	const nextSampleFile = nextSampleFilePath
 		? ref(storage, nextSampleFilePath)
 		: null;
+	const nextSourceRevision = nextSampleFilePath ?? existingRide.originalFilePath;
+	const powerProvenance = ride.powerProvenance;
 
 	try {
 		if (nextSampleFile) {
@@ -420,6 +409,9 @@ export async function replaceRideAnalysis(
 					: null,
 				source: ride.source,
 				sampleFilePath: nextSampleFilePath,
+				sourceRevision: nextSourceRevision,
+				powerProvenance,
+				analyticsProcessing: pendingAnalytics(nextSourceRevision),
 				...summaryFromRide(ride, riderProfile, activityDate),
 			},
 		);
@@ -470,6 +462,12 @@ export async function replaceRideAnalysis(
 				error,
 			);
 		}
+	}
+
+	try {
+		await requestRideAnalytics(existingRide.id);
+	} catch (analyticsError) {
+		console.error("Ride updated but analytics processing failed:", analyticsError);
 	}
 
 	const updatedRide = await getRide(
@@ -590,59 +588,7 @@ export async function deleteRide(
 	userId: string,
 	ride: SavedRide,
 ): Promise<void> {
-	/*
-	 * The paths are stored on the ride document rather than
-	 * reconstructed here. This allows the storage layout to
-	 * evolve without breaking deletion of existing rides.
-	 *
-	 * Validate them before deleting so a malformed Firestore
-	 * document cannot point deletion outside this ride's own
-	 * storage directory.
-	 */
-	if (ride.originalFilePath) {
-		assertRideStoragePath(
-			userId,
-			ride.id,
-			ride.originalFilePath,
-		);
-	}
-
-	if (ride.sampleFilePath) {
-		assertRideStoragePath(
-			userId,
-			ride.id,
-			ride.sampleFilePath,
-		);
-	}
-
-	/*
-	 * Delete Storage artifacts before deleting the Firestore
-	 * summary.
-	 *
-	 * If Storage deletion fails for a real reason, the ride
-	 * document remains available and the operation can safely
-	 * be retried.
-	 *
-	 * Missing Storage objects are intentionally ignored so
-	 * older or partially-cleaned rides can still be removed.
-	 */
-	await Promise.all([
-		deleteRideStorageObject(
-			userId,
-			ride.id,
-			ride.originalFilePath,
-		),
-		deleteRideStorageObject(
-			userId,
-			ride.id,
-			ride.sampleFilePath,
-		),
-	]);
-
-	await deleteDoc(
-		doc(
-			ridesCollection(userId),
-			ride.id,
-		),
-	);
+	if (auth.currentUser?.uid !== userId) throw new Error("You must be signed in to delete this ride.");
+	const response = await fetch(`/api/rides/${encodeURIComponent(ride.id)}`, { method: "DELETE" });
+	if (!response.ok) throw new Error("Unable to delete this ride.");
 }

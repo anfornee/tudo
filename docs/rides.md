@@ -30,7 +30,7 @@ Summary documents live at `users/{uid}/rides/{rideId}`. They contain owner UID, 
 
 Large `RideData` analysis/sample arrays are intentionally not stored in Firestore. A new ride with timeline data stores a versioned `samples.v1.json` sidecar in Storage beside its original file and adds the optional sidecar path to its summary document. This keeps list, calendar, dashboard, and weekly-history reads small while allowing a detail page to fetch one ride's samples. The version wrapper allows the representation to evolve without guessing its shape.
 
-The original file is stored at `users/{uid}/rides/{rideId}/original.fit` or `original.gpx`; detailed samples use `users/{uid}/rides/{rideId}/samples.v1.json`. Both upload before the summary document is created. If any save step fails, the client attempts to remove uploaded artifacts. Authenticated users can access only ride documents and files beneath their own UID. Local development uses the Firestore and Storage emulators.
+The original file is stored at `users/{uid}/rides/{rideId}/original.fit` or `original.gpx`; detailed samples use `users/{uid}/rides/{rideId}/samples.v1.json`. Both upload before the summary document is created. If any save step fails, the client attempts to remove uploaded artifacts. Deletion now runs through the authenticated server so removing the ride and invalidating profile aggregates share one Firestore transaction; referenced Storage objects are then cleaned up best-effort. Authenticated users can access only ride documents and files beneath their own UID. Local development uses the Firestore and Storage emulators.
 
 Ride summaries preserve source-reported `calories` and store computed provenance
 separately in `calorieAnalysis`. Manual FIT/GPX uploads, Wahoo imports, and
@@ -38,6 +38,65 @@ explicit re-analysis all use the same pure estimator. Older summaries receive
 missing metadata once when opened, without rewriting an existing estimate. See
 [`rider-profile.md`](./rider-profile.md) for profile versioning, formulas,
 confidence, and fallback policies.
+
+## Versioned ride analytics
+
+New and re-analyzed rides calculate detailed per-ride analytics on the server
+after their normalized sample sidecar is durable. Wahoo imports use the same
+server service. The compact, versioned result and its recoverable processing
+state are stored on the ride summary document; time-series samples remain in
+Storage. Existing rides are discovered as missing or outdated without a data
+migration. See [`ride-analytics.md`](./ride-analytics.md) for calculation,
+provenance, leases, profile aggregation, personal records, failure recovery,
+and backfill design.
+
+## Profile Stats and analytics management
+
+The existing ride-history hierarchy now places **Profile Stats** immediately
+below Annual Stats. It reads the server-managed profile aggregate rather than
+loading ride samples or recalculating curves in React. Lifetime weighted
+averages, accomplishments, and measured-power records use compact responsive
+grids; secondary totals and the full 14-duration power list expand without
+horizontal overflow. Record cards use the existing ride-detail route, and all
+controls remain keyboard and touch accessible.
+
+Coverage and freshness are part of the presentation contract. Partial results
+state the current-versus-stored ride count, stale values are labeled as last
+calculated, and unavailable measured power is not replaced with estimated
+records. Ride details may show neutral signed differences against the current
+lifetime average. This Phase 3 baseline can include the displayed ride and is
+explicitly labeled; stale aggregates, outdated ride analytics, and estimated
+power comparisons are excluded.
+
+The Profile Stats overflow menu starts a normal missing/outdated update or a
+confirmed full recalculation. A persisted, authenticated resync operation
+advances through small ride and profile batches, exposes phase/counter progress,
+coalesces duplicate starts, and resumes after interruption or reload. It uses
+stored normalized samples only and does not trigger Wahoo downloads. See
+[`ride-analytics.md`](./ride-analytics.md) for leases, cursors, generation
+guards, and retry behavior.
+
+## Performance history
+
+An expandable **Performance Trends** section follows Profile Stats without
+changing the existing Annual Stats hierarchy. It lazily reads server-generated
+monthly checkpoints and supports 3-, 6-, 12-month, and all-time ranges. Volume
+metrics use bars; weighted sensor averages use lines with unavailable months
+left as gaps. The chart marks the partial current month, converts units using
+Rider Profile preferences, scrolls internally on narrow screens, and exposes
+each month through keyboard-focusable points or bars.
+
+Power Bests includes a discrete mean-maximal-power plot for the existing 14
+durations. Its duration axis is logarithmic, missing records are omitted, and
+each measured-power point links to its originating ride. There is deliberately
+no interpolated continuous curve.
+
+Ride details retain the neutral current-lifetime deltas and add a separately
+labeled **previous rides** baseline when available. That baseline includes only
+current analytics with activity timestamps strictly earlier than the displayed
+ride; same-time, future, estimated-power, and stale-generation data do not
+contribute. See [`ride-analytics.md`](./ride-analytics.md) for the monthly
+checkpoint and bounded partial-month query design.
 
 ## Synchronized cursor and FIT export
 

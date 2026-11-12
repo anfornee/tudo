@@ -9,7 +9,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DeleteRideDialog } from "@/components/rides/DeleteRideDialog";
 import { ReanalyzeRideDialog } from "@/components/rides/ReanalyzeRideDialog";
@@ -20,6 +20,7 @@ import { RideSummary } from "@/components/rides/RideSummary";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
 import { getRiderProfile } from "@/lib/rider-profile/persistence";
+import type { RiderUnitSystem } from "@/lib/rider-profile/types";
 import type { RideSample } from "@/lib/ride.types";
 import { type RideCursor } from "@/lib/rides/cursor";
 import {
@@ -32,6 +33,13 @@ import { reanalyzeRide } from "@/lib/rides/reanalysis";
 import { downloadRideFile, encodeRideSamplesAsFit } from "@/lib/rides/export";
 import { getOriginalRideFile } from "@/lib/rides/source";
 import type { SavedRide } from "@/lib/rides/types";
+import {
+	buildRideComparisons,
+	rideAnalyticsIsCurrent,
+} from "@/lib/rides/profile-presentation";
+import { useProfileAnalytics } from "@/lib/rides/use-profile-analytics";
+import { fetchHistoricalComparison } from "@/lib/rides/historical-analytics-client";
+import type { HistoricalComparisonResponse } from "@/lib/rides/historical-analytics-model";
 
 interface SavedRideContentProps {
 	userId: string;
@@ -42,7 +50,16 @@ export function SavedRideContent({
 	userId,
 	rideId,
 }: SavedRideContentProps) {
+	const profileAnalytics = useProfileAnalytics();
 	const [ride, setRide] = useState<SavedRide | null>(null);
+	const [units, setUnits] = useState<RiderUnitSystem>("imperial");
+	const [historicalComparison, setHistoricalComparison] = useState<{
+		rideId: string;
+		generation: number;
+		result: HistoricalComparisonResponse;
+	} | null>(null);
+	const [historicalComparisonLoading, setHistoricalComparisonLoading] = useState(false);
+	const [historicalComparisonError, setHistoricalComparisonError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 
 	const [samples, setSamples] =
@@ -137,6 +154,7 @@ export function SavedRideContent({
 							loadSamples(savedRide),
 							getRiderProfile(userId),
 						]);
+						setUnits(riderProfile?.preferredUnits ?? "imperial");
 						try {
 							setRide(await ensureRideCalorieAnalysis(userId, savedRide, loadedSamples, riderProfile));
 						} catch (analysisError) {
@@ -195,6 +213,7 @@ export function SavedRideContent({
 			setReanalysisStatus(
 				"success",
 			);
+			await profileAnalytics.refresh();
 		} catch (error) {
 			console.error(
 				"Unable to re-analyze ride:",
@@ -270,6 +289,96 @@ export function SavedRideContent({
 			setExporting(false);
 		}
 	}
+
+	const comparisons = useMemo(() => {
+		if (
+			!ride
+			|| !rideAnalyticsIsCurrent(ride)
+			|| !profileAnalytics.data?.fresh
+			|| !profileAnalytics.data.profile
+			|| !ride.analytics
+		) return undefined;
+		const input = {
+			averageMovingSpeedMph: ride.analytics.speed.averageMovingMph,
+			averagePowerWatts: ride.analytics.power.averageWatts,
+			normalizedPowerWatts: ride.analytics.power.normalizedWatts,
+			averageCadenceRpm: ride.analytics.cadence.averageRpm,
+			averageHeartRateBpm: ride.analytics.heartRate.averageBpm,
+			powerProvenance: ride.analytics.power.provenance,
+		};
+		const groups = [buildRideComparisons(input, profileAnalytics.data.profile.lifetime, units)];
+		const previous = historicalComparison?.rideId === ride.id
+			&& historicalComparison.generation === profileAnalytics.data.profile.sourceGeneration
+			? historicalComparison.result
+			: null;
+		if (previous?.available && previous.statistics) {
+			groups.push(buildRideComparisons(input, previous.statistics, units, "previous rides"));
+		}
+		return groups;
+	}, [historicalComparison, profileAnalytics.data, ride, units]);
+
+	useEffect(() => {
+		if (!ride || !rideAnalyticsIsCurrent(ride) || !profileAnalytics.data?.fresh) {
+			return;
+		}
+		const controller = new AbortController();
+		const generation = profileAnalytics.data.profile?.sourceGeneration;
+		if (generation === undefined) return;
+		void Promise.resolve().then(() => {
+			if (controller.signal.aborted) return;
+			setHistoricalComparisonLoading(true);
+			setHistoricalComparisonError(null);
+			return fetchHistoricalComparison(ride.id, controller.signal);
+		})
+			.then((result) => {
+				if (result) {
+					const compatible = result.sourceGeneration === generation
+						? result
+						: { available: false, reason: "stale" as const, sourceGeneration: result.sourceGeneration, statistics: null };
+					setHistoricalComparison({ rideId: ride.id, generation, result: compatible });
+				}
+			})
+			.catch((comparisonError) => {
+				if (!(comparisonError instanceof DOMException && comparisonError.name === "AbortError")) {
+					console.error("Unable to load previous-rides comparison:", comparisonError);
+					setHistoricalComparison(null);
+					setHistoricalComparisonError("Previous-rides comparison could not be loaded.");
+				}
+			})
+			.finally(() => {
+				if (!controller.signal.aborted) setHistoricalComparisonLoading(false);
+			});
+		return () => controller.abort();
+	}, [profileAnalytics.data?.fresh, profileAnalytics.data?.profile?.sourceGeneration, ride]);
+
+	const activeHistoricalComparison = ride && historicalComparison?.rideId === ride.id
+		&& historicalComparison.generation === profileAnalytics.data?.profile?.sourceGeneration
+		? historicalComparison.result
+		: null;
+	const missingPreviousSensorBaseline = Boolean(
+		ride?.analytics
+		&& activeHistoricalComparison?.available
+		&& activeHistoricalComparison.statistics
+		&& (
+			(ride.analytics.power.provenance === "measured" && ride.analytics.power.averageWatts !== null && activeHistoricalComparison.statistics.averageMeasuredPowerWatts === null)
+			|| (ride.analytics.power.normalizedWatts !== null && activeHistoricalComparison.statistics.durationWeightedRideNormalizedPowerWatts === null)
+			|| (ride.analytics.cadence.averageRpm !== null && activeHistoricalComparison.statistics.averageCadenceRpm === null)
+			|| (ride.analytics.heartRate.averageBpm !== null && activeHistoricalComparison.statistics.averageHeartRateBpm === null)
+		)
+	);
+	const comparisonNote = profileAnalytics.data?.fresh && historicalComparisonLoading
+		? "Loading previous-rides baseline…"
+		: historicalComparisonError
+			? historicalComparisonError
+		: activeHistoricalComparison && !activeHistoricalComparison.available
+			? activeHistoricalComparison.reason === "no_prior_rides"
+				? "Previous-rides comparison unavailable because there are no earlier analyzed rides."
+				: activeHistoricalComparison.reason === "month_too_large"
+					? "Previous-rides comparison unavailable because the target month exceeds the bounded comparison limit."
+					: "Previous-rides comparison unavailable until historical analytics are current."
+			: missingPreviousSensorBaseline
+				? "Some previous-rides comparisons are unavailable because earlier rides lack comparable sensor data."
+				: null;
 
 	if (loading) {
 		return (
@@ -394,6 +503,9 @@ export function SavedRideContent({
 					fileName={
 						ride.originalFileName
 					}
+					units={units}
+					comparisons={comparisons}
+					comparisonNote={comparisonNote}
 				/>
 			</section>
 

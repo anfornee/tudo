@@ -6,6 +6,8 @@ import { isFirebaseEmulatorEnvironment, localFirebaseProjectId } from "@/lib/fir
 import { summaryFromRide } from "@/lib/rides/summary";
 import { getServerRiderProfile } from "@/lib/rider-profile/server";
 import type { ProcessedRide, StoredRideSamples } from "@/lib/rides/types";
+import { RIDE_ANALYTICS_ALGORITHM_VERSION } from "@/lib/rides/analytics-model";
+import { processRideAnalytics } from "@/lib/rides/analytics-server";
 
 function rideDocument(uid: string, rideId: string) {
   return getFirestore(adminAuth.app).collection("users").doc(uid).collection("rides").doc(rideId);
@@ -26,6 +28,8 @@ export async function saveWahooRide(uid: string, rideId: string, processed: Proc
   const prefix = `users/${uid}/rides/${rideId}/${randomUUID()}`;
   const original = bucket.file(`${prefix}/original.fit`);
   const samples = ride.samples.length ? bucket.file(`${prefix}/samples.v1.json`) : null;
+  const sourceRevision = samples?.name ?? original.name;
+  const powerProvenance = ride.powerProvenance;
 
   async function cleanUp() {
     await Promise.allSettled([
@@ -58,6 +62,18 @@ export async function saveWahooRide(uid: string, rideId: string, processed: Proc
       source: ride.source,
       originalFilePath: original.name,
       sampleFilePath: samples?.name ?? null,
+      sourceRevision,
+      powerProvenance,
+      analyticsProcessing: {
+        state: "pending",
+        algorithmVersion: RIDE_ANALYTICS_ALGORITHM_VERSION,
+        sourceRevision,
+        lastAttemptedAt: null,
+        lastSuccessfulAt: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        error: null,
+      },
       ...summaryFromRide(ride, riderProfile, activityDate),
     });
   } catch (error) {
@@ -67,5 +83,13 @@ export async function saveWahooRide(uid: string, rideId: string, processed: Proc
     }
     // A failed response can still follow a committed create. Preserve its files.
     throw error;
+  }
+
+  try {
+    await processRideAnalytics(uid, rideId);
+  } catch (error) {
+    // Import success is independent from derived analytics; a later retry or
+    // backfill can recover without downloading the Wahoo activity again.
+    console.error("Wahoo ride saved but analytics processing failed", { rideId, error });
   }
 }

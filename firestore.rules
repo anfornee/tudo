@@ -181,6 +181,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Derived profile analytics and resumable rebuild state are server-managed.
+    // Authenticated clients read them through the UID-bound Route Handler.
+    match /users/{userId}/profileAnalytics/{documentId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId}/bills/{billId} {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null

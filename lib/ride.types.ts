@@ -12,8 +12,11 @@ export interface RideSample {
 	distanceMiles: number | null;
 }
 
+export type RidePowerProvenance = "measured" | "estimated" | "unavailable";
+
 export interface RideData {
 	source: "gpx" | "fit";
+	powerProvenance: RidePowerProvenance;
 
 	distanceMiles: number;
 	durationSeconds: number;

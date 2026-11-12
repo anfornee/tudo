@@ -28,6 +28,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { auth } from "@/lib/firebase-client";
 import { getRiderProfile } from "@/lib/rider-profile/persistence";
 import type { RiderProfile } from "@/lib/rider-profile/types";
+import { useProfileAnalytics } from "@/lib/rides/use-profile-analytics";
 import { calorieInputFromRide, estimateCyclingCalories } from "@/lib/rides/calories";
 import {
 	formatElevationGain,
@@ -65,6 +66,7 @@ function rideDate(ride: SavedRide) {
 export function RidesPageContent({
 	userId,
 }: RidesPageContentProps) {
+	const profileAnalytics = useProfileAnalytics();
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [rides, setRides] = useState<SavedRide[]>([]);
@@ -225,6 +227,7 @@ export function RidesPageContent({
 			setSavedRideId(saved.id);
 
 			await loadRides();
+			await profileAnalytics.refresh();
 
 			setSaveMessage(
 				"Ride saved. The original activity file was preserved.",
@@ -275,6 +278,7 @@ export function RidesPageContent({
 			);
 
 			setReanalysisStatus("success");
+			await profileAnalytics.refresh();
 		} catch (error) {
 			console.error(
 				"Unable to re-analyze ride:",
@@ -335,6 +339,7 @@ export function RidesPageContent({
 			setSaveMessage(
 				"Ride deleted.",
 			);
+			await profileAnalytics.refresh();
 		} catch (error) {
 			console.error(
 				"Unable to delete ride:",
@@ -369,6 +374,11 @@ export function RidesPageContent({
 								ride.elevationGainFeet,
 						}),
 					)}
+					profileAnalytics={profileAnalytics.data}
+					profileLoading={profileAnalytics.loading}
+					profileError={profileAnalytics.error}
+					units={riderProfile?.preferredUnits ?? "imperial"}
+					onRefreshProfile={profileAnalytics.refresh}
 				/>
 			)}
 
@@ -545,6 +555,7 @@ export function RidesPageContent({
 										.activityDate
 								}
 								calorieAnalysis={previewCalorieAnalysis}
+								units={riderProfile?.preferredUnits ?? "imperial"}
 							/>
 						</div>
 					)}

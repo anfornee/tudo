@@ -1,9 +1,6 @@
 import type { RideData, RideSample } from "./ride.types";
-import {
-	calculateBestAverage,
-	calculateNormalizedPower,
-	calculatePowerPercentiles,
-} from "./rideCalculations";
+import { calculatePowerPercentiles } from "./rideCalculations";
+import { calculatePowerAnalytics } from "./rides/ride-analytics";
 
 export interface TrackPoint {
 	latitude: number;
@@ -290,52 +287,6 @@ function calculateElevation(
 }
 
 /**
- * Calculate maximum instantaneous GPS speed.
- *
- * Returns meters/second.
- */
-function calculateMaxSpeed(
-	points: TrackPoint[],
-): number {
-	let maxSpeed = 0;
-
-	for (let i = 1; i < points.length; i++) {
-		const previous = points[i - 1];
-		const current = points[i];
-
-		if (
-			!previous.timestamp ||
-			!current.timestamp
-		) {
-			continue;
-		}
-
-		const elapsedSeconds =
-			(current.timestamp.getTime() -
-				previous.timestamp.getTime()) /
-			1000;
-
-		if (elapsedSeconds <= 0) {
-			continue;
-		}
-
-		const distance = haversineDistance(
-			previous.latitude,
-			previous.longitude,
-			current.latitude,
-			current.longitude,
-		);
-
-		const speed =
-			distance / elapsedSeconds;
-
-		maxSpeed = Math.max(maxSpeed, speed);
-	}
-
-	return maxSpeed;
-}
-
-/**
  * Calculate average value.
  */
 function calculateAverage(
@@ -405,12 +356,6 @@ export function analyzeGpx(
 				value !== undefined,
 		);
 
-	const averagePower =
-		calculateAverage(powerSamples);
-
-	const maxPower =
-		calculateMax(powerSamples);
-
 	/*
 	 * Cadence.
 	 */
@@ -442,28 +387,6 @@ export function analyzeGpx(
 
 	const maxHeartRate =
 		calculateMax(heartRateSamples);
-
-	/*
-	 * Speed.
-	 */
-	const maxSpeedMps =
-		calculateMaxSpeed(points);
-
-	/*
-	 * Work.
-	 *
-	 * Watts × seconds = joules.
-	 * Divide by 1000 for kJ.
-	 *
-	 * This is an estimate because GPX files don't
-	 * necessarily contain a power sample for every
-	 * second.
-	 */
-	const workKj =
-		averagePower !== null
-			? (averagePower * durationSeconds) /
-				1000
-			: null;
 
 	const firstTimestamp = points.find((point) => point.timestamp)?.timestamp;
 	let cumulativeDistanceMeters = 0;
@@ -509,9 +432,12 @@ export function analyzeGpx(
 			distanceMiles: cumulativeDistanceMeters / 1609.344,
 		}];
 	});
+	const powerProvenance = powerSamples.length ? "measured" as const : "unavailable" as const;
+	const powerAnalytics = calculatePowerAnalytics(samples, powerProvenance);
 
 	return {
 		source: "gpx",
+		powerProvenance,
 
 		distanceMiles:
 			distanceMeters / 1609.344,
@@ -527,13 +453,10 @@ export function analyzeGpx(
 		averageSpeedMph:
 			averageSpeedMps * 2.236936,
 
-		averagePower,
-		maxPower,
+		averagePower: powerAnalytics.averageWatts,
+		maxPower: powerAnalytics.maxWatts,
 
-		normalizedPower:
-			calculateNormalizedPower(
-				powerSamples,
-			),
+		normalizedPower: powerAnalytics.normalizedWatts,
 
 		averageCadence,
 		maxCadence,
@@ -552,29 +475,10 @@ export function analyzeGpx(
 			).length,
 
 		bestPower: {
-			oneMinute:
-				calculateBestAverage(
-					powerSamples,
-					60,
-				),
-
-			fiveMinutes:
-				calculateBestAverage(
-					powerSamples,
-					300,
-				),
-
-			tenMinutes:
-				calculateBestAverage(
-					powerSamples,
-					600,
-				),
-
-			twentyMinutes:
-				calculateBestAverage(
-					powerSamples,
-					1200,
-				),
+			oneMinute: powerAnalytics.powerDuration[60]?.averageWatts ?? null,
+			fiveMinutes: powerAnalytics.powerDuration[300]?.averageWatts ?? null,
+			tenMinutes: powerAnalytics.powerDuration[600]?.averageWatts ?? null,
+			twentyMinutes: powerAnalytics.powerDuration[1200]?.averageWatts ?? null,
 		},
 
 		powerPercentiles:

@@ -8,11 +8,17 @@ import {
 import Link from "next/link";
 
 import {
-	formatElevationGain,
-	formatRideDistance,
 	formatRideDuration,
 } from "@/lib/rides/formatters";
 import type { RideCalorieAnalysis } from "@/lib/rides/calories";
+import type { RiderUnitSystem } from "@/lib/rider-profile/types";
+import {
+	formatProfileDistance,
+	formatProfileElevation,
+	formatProfileSpeed,
+	formatRideComparison,
+	type RideMetricComparisons,
+} from "@/lib/rides/profile-presentation";
 import type {
 	RideSource,
 	RideSummaryMetrics,
@@ -24,6 +30,9 @@ interface RideSummaryProps {
 	activityDate: Date | null;
 	fileName?: string;
 	calorieAnalysis?: RideCalorieAnalysis | null;
+	units?: RiderUnitSystem;
+	comparisons?: RideMetricComparisons[];
+	comparisonNote?: string | null;
 }
 
 const calorieMethodLabels: Record<RideCalorieAnalysis["method"], string> = {
@@ -54,18 +63,22 @@ export function RideSummary({
 	activityDate,
 	fileName,
 	calorieAnalysis,
+	units = "imperial",
+	comparisons,
+	comparisonNote,
 }: RideSummaryProps) {
 	const selectedAnalysis = calorieAnalysis === undefined
 		? ride.calorieAnalysis ?? null
 		: calorieAnalysis;
 	const displayedCalories = selectedAnalysis?.calories ?? ride.calories ?? null;
 	const calorieMethod = selectedAnalysis?.method ?? (ride.calories !== null ? "recorded" : null);
+	const comparisonDetail = (metric: keyof RideMetricComparisons) => comparisons
+		?.flatMap((group) => group[metric] ? [formatRideComparison(group[metric])] : [])
+		.join(" · ") || undefined;
 	const metrics = [
 		{
 			label: "Distance",
-			value: formatRideDistance(
-				ride.distanceMiles,
-			),
+			value: formatProfileDistance(ride.distanceMiles, units),
 		},
 		{
 			label: "Duration",
@@ -90,13 +103,12 @@ export function RideSummary({
 			: []),
 		{
 			label: "Average speed",
-			value: `${ride.averageSpeedMph.toFixed(1)} mph`,
+			value: formatProfileSpeed(ride.averageSpeedMph, units),
+			detail: comparisonDetail("averageSpeed"),
 		},
 		{
 			label: "Elevation",
-			value: formatElevationGain(
-				ride.elevationGainFeet,
-			),
+			value: formatProfileElevation(ride.elevationGainFeet, units),
 		},
 		...(displayedCalories !== null
 			? [
@@ -116,6 +128,7 @@ export function RideSummary({
 						value: `${Math.round(
 							ride.averagePower,
 						)} W`,
+						detail: comparisonDetail("averagePower"),
 					},
 				]
 			: []),
@@ -136,6 +149,7 @@ export function RideSummary({
 						value: `${Math.round(
 							ride.normalizedPower,
 						)} W`,
+						detail: comparisonDetail("normalizedPower"),
 					},
 				]
 			: []),
@@ -146,6 +160,7 @@ export function RideSummary({
 						value: `${Math.round(
 							ride.averageCadence,
 						)} rpm`,
+						detail: comparisonDetail("averageCadence"),
 					},
 				]
 			: []),
@@ -166,6 +181,7 @@ export function RideSummary({
 						value: `${Math.round(
 							ride.averageHeartRate,
 						)} bpm`,
+						detail: comparisonDetail("averageHeartRate"),
 					},
 				]
 			: []),
@@ -239,6 +255,7 @@ export function RideSummary({
 					},
 				)}
 			</dl>
+			{comparisonNote ? <p className="text-xs text-muted-foreground">{comparisonNote}</p> : null}
 			{displayedCalories === null ? (
 				<p className="text-sm text-muted-foreground">
 					Add a dated weight in{" "}
